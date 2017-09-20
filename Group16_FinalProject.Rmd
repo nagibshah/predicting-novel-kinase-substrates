@@ -1,0 +1,47 @@
+---
+title: "Group16_Project2"
+group: 16
+member: Nagib Shah / Ling Qi / Xinan Ma / Young Choi
+author: "Ling Qi"
+date: "19 September 2017"
+output: html_document
+---
+
+# All group members, please install packages here
+```{r}
+
+```
+
+# All group members, please set up your root working directory here
+```{r}
+require(knitr)
+opts_knit$set(root.dir = "C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project/Datasets")
+
+```
+
+# All group members, please call libraries here
+```{r}
+
+```
+
+# All group members, please declare constant variables here
+```{r}
+
+```
+
+# Read data
+```{r}
+dt.Insulin <- read.delim("InsulinPhospho.txt")
+dt.Akt <- read.delim("Akt_substrates.txt", header = F)
+dt.mTOR <- read.delim("mTOR_substrates.txt", header = F)   
+
+dt.Akt.labelled <- dt.Insulin[which(dt.Insulin$Identifier %in% dt.Akt$V1),]
+dt.mTOR.labelled <- dt.Insulin[which(dt.Insulin$Identifier %in% dt.mTOR$V1),]
+
+View(dt.Insulin)
+View(dt.Akt)
+View(dt.mTOR)
+View(dt.Akt.labelled)
+View(dt.mTOR.labelled)
+```
+
