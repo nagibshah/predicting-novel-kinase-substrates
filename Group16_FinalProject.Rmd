@@ -9,7 +9,9 @@ output: html_document
 
 # All group members, please install packages here
 ```{r}
-
+install.packages("RSSL")
+install.packages("upclass")
+install.packages("mclust")
 ```
 
 # All group members, please set up your root working directory here
@@ -21,6 +23,9 @@ opts_knit$set(root.dir = "C:/Users/Ling/Documents/My Study/STAT5003/Project2/Fin
 
 # All group members, please call libraries here
 ```{r}
+library(mclust)
+library(upclass)
+library(RSSL)
 
 ```
 
@@ -35,13 +40,84 @@ dt.Insulin <- read.delim("InsulinPhospho.txt")
 dt.Akt <- read.delim("Akt_substrates.txt", header = F)
 dt.mTOR <- read.delim("mTOR_substrates.txt", header = F)   
 
-dt.Akt.labelled <- dt.Insulin[which(dt.Insulin$Identifier %in% dt.Akt$V1),]
-dt.mTOR.labelled <- dt.Insulin[which(dt.Insulin$Identifier %in% dt.mTOR$V1),]
 
-View(dt.Insulin)
-View(dt.Akt)
-View(dt.mTOR)
-View(dt.Akt.labelled)
-View(dt.mTOR.labelled)
+dt.Insulin.New <- dt.Insulin
+dt.Insulin.New$Class <- 0 
+
+dt.Insulin.New$Class[dt.Insulin.New$Identifier %in% dt.Akt$V1] <- 1
+dt.Insulin.New$Class[dt.Insulin.New$Identifier %in% dt.mTOR$V1] <- -1
+
+dt.Akt.labeled <- dt.Insulin.New[which(dt.Insulin.New$Identifier %in% dt.Akt$V1),]
+dt.mTOR.labeled <- dt.Insulin.New[which(dt.Insulin.New$Identifier %in% dt.mTOR$V1),]
+
+
+#View(dt.Insulin.New)
+#unique(dt.Insulin.New$Class)
+#View(dt.Insulin)
+#View(dt.Akt)
+#View(dt.mTOR)
+#View(dt.Akt.labelled)
+#View(dt.mTOR.labelled)
+```
+
+# approach 1 - use naive bayes classification build model based on 60% labeled data, then to predict 40% labeled data, then build self training model
+# this approach failed
+```{r}
+
+func <- function(m,d) {
+   p <- predict(m,d,type='raw')
+   data.frame(cl=colnames(p)[apply(p,1,which.max)],p=apply(p,1,max))
+}
+
+# Set Seed so that same sample can be reproduced in future also
+set.seed(101) 
+
+# Now Selecting 60% of labeled data and combine with unlabeled data   
+sample <- sample.int(n = nrow(dt.Akt.labeled), size=floor(.6*nrow(dt.Akt.labeled)), replace = F)
+dt.Akt.labeled.train <- dt.Akt.labeled[sample, ]
+dt.Akt.labeled.test <- dt.Akt.labeled[-sample, ]
+View(dt.Akt.labeled.train)
+#dim(dt.Insulin)
+#dim(dt.Akt.labeled)
+
+dt.Akt.train <- rbind(dt.Akt.labeled.train, dt.Insulin.New[!(dt.Insulin.New$Identifier %in% dt.Akt$V1),])
+
+
+nbAkt <- naiveBayes(Class ~ ., dt.Akt.labeled.train)
+summary(nbAkt)
+
+table(predict(nbAkt,dt.Akt.labeled.test),dt.Akt.labeled.test$Class)
+nbAktST <- SelfTrain(Class ~ .,dt.Akt.train,learner('naiveBayes',list()),'func')
+table(predict(nbAktST,dt.Akt.labeled.test),dt.Akt.labeled.test$Class)
+
+```
+# approach 2 - linear separation 
+```{r}
+library(e1071)
+
+svm.linear <- svm(Class ~ ., data=dt.Insulin.New, kernel = 'linear', type ='C-classification')
+summary(svm.linear)
+
+```
+
+# separate labelled data as 60/40, combine 60% labeled with unlabeled data to train model, and use the 40% labeled for testing
+```{r}
+# Set Seed so that same sample can be reproduced in future also
+set.seed(101) 
+
+# Now Selecting 60% of labeled data and combine with unlabeled data   
+sample <- sample.int(n = nrow(dt.Akt.labeled), size=floor(.6*nrow(dt.Akt.labeled)), replace = F)
+dt.Akt.labeled.train <- dt.Akt.labeled[sample, ]
+dt.Akt.labeled.test <- dt.Akt.labeled[-sample, ]
+View(dt.Akt.labeled.train)
+#dim(dt.Insulin)
+#dim(dt.Akt.labeled)
+
+dt.Akt.train <- rbind(dt.Akt.labeled.train, dt.Insulin[!(dt.Insulin$Identifier %in% dt.Akt$V1),])
+
+dim(dt.Akt.train)
+dim(dt.Akt.labeled.test)
+
+
 ```
 
