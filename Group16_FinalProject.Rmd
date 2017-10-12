@@ -194,9 +194,6 @@ head(dt.Akt.labeled)
 for (i in 1:len(nrow(dt.Akt.labeled))) {
   dt.Akt.labeled[, ncol(dt.Akt.labeled) + 1] <- 
     
-    df[, ncol(df) + 1] <- rnorm(nrow(df))
-  names(df)[ncol(df)] <- paste0("mean_", i)
-  
 }
 
 ```
