@@ -16,6 +16,7 @@ install.packages("mclust")
 install.packages("caret")
 install.packages("lme4")
 install.packages("randomForest")
+install.packages("RecordLinkage")
 
 ```
 
@@ -27,7 +28,7 @@ opts_knit$set(root.dir = "C:/Users/Ling/Documents/My Study/STAT5003/Project2/Fin
 ```
 
 # All group members, please call libraries here
-```{r}
+```{r, warning=FALSE}
 library(mclust)
 library(upclass)
 library(RSSL)
@@ -51,10 +52,14 @@ dim(dt.Akt)
 dim(dt.mTOR)
 
 dt.Insulin.New <- dt.Insulin
-#dt.Insulin.New$Class <- NA 
 
 dt.Insulin.New$Class[dt.Insulin.New$Identifier %in% dt.Akt$V1] <- 0
 dt.Insulin.New$Class[dt.Insulin.New$Identifier %in% dt.mTOR$V1] <- 1
+
+# This column contains the sequence of the phosphorylation site. It is a 13-amino acid sequence in which the 7th position corresponds to the amino acid that is phosphorylated.
+dt.Insulin.New$left.site <- substr(dt.Insulin.New$Seq.Window, 1, 6)
+dt.Insulin.New$right.site <- substr(dt.Insulin.New$Seq.Window, 8, 13)
+dt.Insulin.New$p.site <- substr(dt.Insulin.New$Seq.Window, 7, 7)
 
 dt.Akt.labeled <- dt.Insulin.New[which(dt.Insulin.New$Identifier %in% dt.Akt$V1),]
 dt.mTOR.labeled <- dt.Insulin.New[which(dt.Insulin.New$Identifier %in% dt.mTOR$V1),]
@@ -78,264 +83,126 @@ dt.All.labeled <- subset(dt.Insulin.New, !is.na(dt.Insulin.New$Class))
 #View(dt.mTOR.labelled)
 ```
 
-
-# self-training approach - iterative approach
-# approach 1 - build classification SVM model, 
-# result no good including sequence window -no Akt , all mTOR
-# result good without sequence window - so need to think about to transform sequence window to sort of probability of similarity
+# seq.window pattern transformation
 ```{r}
-# SVM for all labeled data, identifier should not be feature, ignore it when build model
-model <- svm(Class ~ ., data=dt.All.labeled[, 2:17], type="C-classification")
-summary(model)
-pred <- predict(model,dt.All.labeled[, 2:16])
-table(pred,dt.All.labeled[, 17])
-
-# take out of sequence window, do the classification SVM model again 
-model.noSW <- svm(Class ~ ., data=dt.All.labeled[, 3:17], type="C-classification", probability=TRUE)
-summary(model.noSW)
-pred.noSW <- predict(model.noSW,dt.All.labeled[, 3:16])
-table(pred.noSW, dt.All.labeled[, 17])
-
-#head(dt.All.labeled[, 3:17])
-
-# predict unlabeled data 
-pred.unlabeled.noSW <- predict(model.noSW,dt.All.unlabeled[, 3:16], decision.values = TRUE, probability=TRUE)
-pred.unlabeled.noSW
-head(attr(pred.unlabeled.noSW, "probabilities"))
-
-pred <- predict(model, x, decision.values = TRUE, probability = TRUE)
-attr(pred.unlabeled.noSW, "decision.values")
-attr(pred.unlabeled.noSW, "probabilities")[1:4,]
-attr(pred.unlabeled.noSW, "probabilities")[,1]
-
 
 ```
 
+# feature selection 
 ```{r}
 
-pred.conv <- function(threshold, a, b) {
-  pred.table <- cbind(a, b)
-  pred.table <- as.data.frame.matrix(pred.table)
+```
 
-  pred.table$predictClass <- 0
-  pred.table[pred.table$prediction > threshold, "predictClass"] <- 1
+# all Akt as positive plus 22 randomly selected 22 as negative to build SVM classification model 
+```{r}
+# label data for Akt analysis data set 
+dt.Insulin.Akt <- dt.Insulin
+dt.Insulin.Akt$Class <- -1
+dt.Insulin.Akt$Class[dt.Insulin$Identifier %in% dt.Akt$V1] <- 1
 
-  colnames(pred.table) <- c("OriginalType", "prediction", "predictClass")
+# initial data frame to append predict probability 
+Akt.result <- dt.Insulin.Akt[, c("Identifier", "Class")]
+
+# for loop to do model 100 times 
+for (i in 1:2000) {
+  
+# randomly sample the same number of rows for non-Akt
+dt.Insulin.Akt.sample <- dt.Insulin.Akt[dt.Insulin.Akt$Class==-1,][sample(nrow(dt.Insulin.Akt[dt.Insulin.Akt$Class==-1, ]), nrow(dt.Akt)), ]
+
+dt.Insulin.Akt.modeldata <- rbind(dt.Insulin.Akt[dt.Insulin.Akt$Class==1,], dt.Insulin.Akt.sample)
+
+# build SVM classification model incl probability -- temporarily without seq.window
+Akt.model <- svm(Class ~ ., data=dt.Insulin.Akt.modeldata[, 3:17], type="C-classification", decision.values = TRUE, probability=TRUE)
+#summary(Akt.model)
+
+# just to check 
+# pred.Akt <- predict(Akt.model, dt.Insulin.Akt.modeldata[, 3:16])
+# table(pred.Akt, dt.Insulin.Akt.modeldata[, 17])
+
+# predict full data 
+pred.Akt <- predict(Akt.model, dt.Insulin.Akt[, 3:16], decision.values = TRUE, probability = TRUE)
+#pred.Akt
+#table(pred.Akt, dt.Insulin.Akt[, 17])
+#attr(pred.Akt, "probabilities")[1:4,]
+
+Akt.result[, ncol(Akt.result) + 1] <- attr(pred.Akt, "probabilities")[,1]
+names(Akt.result)[ncol(Akt.result)] <- paste0("model_", i)
+
+}
+
+#head(Akt.result)
+Akt.final <- data.frame(Akt.result[,1:2],Akt.Means=rowMeans(Akt.result[,3:ncol(Akt.result)]))
+
+head(Akt.final)
+#write.csv(Akt.final, file = "Akt_final.csv")
+#Akt.final[Akt.final$Class==1, ]
+
+```
+
+
+# all mTOR as positive plus 22 randomly selected 22 as negative to build SVM classification model 
+```{r}
+# label data for mTOR analysis data set 
+dt.Insulin.mTOR <- dt.Insulin
+dt.Insulin.mTOR$Class <- -1
+dt.Insulin.mTOR$Class[dt.Insulin$Identifier %in% dt.mTOR$V1] <- 1
+
+# initial data frame to append predict probability 
+mTOR.result <- dt.Insulin.mTOR[, c("Identifier", "Class")]
+
+# for loop to do model 100 times 
+for (i in 1:2000) {
+  
+# randomly sample the same number of rows for non-mTOR
+dt.Insulin.mTOR.sample <- dt.Insulin.mTOR[dt.Insulin.mTOR$Class==-1,][sample(nrow(dt.Insulin.mTOR[dt.Insulin.mTOR$Class==-1, ]), nrow(dt.mTOR)), ]
+
+dt.Insulin.mTOR.modeldata <- rbind(dt.Insulin.mTOR[dt.Insulin.mTOR$Class==1,], dt.Insulin.mTOR.sample)
+
+# build SVM classification model incl probability -- temporarily without seq.window
+mTOR.model <- svm(Class ~ ., data=dt.Insulin.mTOR.modeldata[, 3:17], type="C-classification", decision.values = TRUE, probability=TRUE)
+#summary(mTOR.model)
+
+# just to check 
+# pred.mTOR <- predict(mTOR.model, dt.Insulin.mTOR.modeldata[, 3:16])
+# table(pred.mTOR, dt.Insulin.mTOR.modeldata[, 17])
+
+# predict full data 
+pred.mTOR <- predict(mTOR.model, dt.Insulin.mTOR[, 3:16], decision.values = TRUE, probability = TRUE)
+#pred.mTOR
+#table(pred.mTOR, dt.Insulin.mTOR[, 17])
+#attr(pred.mTOR, "probabilities")[1:4,]
+
+mTOR.result[, ncol(mTOR.result) + 1] <- attr(pred.mTOR, "probabilities")[,1]
+names(mTOR.result)[ncol(mTOR.result)] <- paste0("model_", i)
+
+}
+
+#head(mTOR.result)
+mTOR.final <- data.frame(mTOR.result[,1:2],mTOR.Means=rowMeans(mTOR.result[,3:ncol(mTOR.result)]))
+
+head(mTOR.final)
+#write.csv(mTOR.final, file = "mTOR_final.csv")
+mTOR.final[mTOR.final$Class==1, ]
+
+```
+
+
+# text mining to find similarity of seq.window
+```{r}
+head(dt.Akt.labeled)
+
+for (i in 1:len(nrow(dt.Akt.labeled))) {
+  dt.Akt.labeled[, ncol(dt.Akt.labeled) + 1] <- 
+    
+    df[, ncol(df) + 1] <- rnorm(nrow(df))
+  names(df)[ncol(df)] <- paste0("mean_", i)
+  
 }
 
 ```
 
-# approach 2
-# step 1 - build regression SVM model based on labled data 
+# Validation
 ```{r}
-
-# classification model
-ml <- svm(as.factor(Class)~., data = dt.All.labeled[, 2:17])
-summary(ml)
-table(predict(ml, dt.All.labeled[, 2:16]), dt.All.labeled$Class)
-
-
-# regression model
-model.SVM <- svm(Class~., data = dt.All.labeled[, 2:17])
-#model.SVM <- svm(as.factor(Class)~., data = dt.All.labeled.noID)
-summary(model.SVM)
-
-# test accuracy for labled data
-prediction <- predict(model.SVM, dt.All.labeled[, 2:16])
-#View(dt.All.labeled[, 2:16])
-#View(prediction)
-#View(cbind(dt.All.labeled[,17], prediction))
-
-pred.table <- cbind(dt.All.labeled[,17], prediction)
-#pred.table <- table(prediction, dt.All.labeled$Class)
-class(pred.table)
-dim(pred.table)
-pred.table <- as.data.frame.matrix(pred.table)
-
-#sort pred table by prediction 
-pred.table <- pred.table[order(pred.table$prediction), ]
-
-
-# we can see when prob > 0.92, the classification is more accurate
-#View(pred.table[pred.table$prob > 0.92,][, 1:2])
-#View(data.frame(table(pred.table[pred.table$prob > 0.92,][, 1:2])))
-#pred.table %>% mutate(predictClass = ifelse(prediction > 0.92, 1, 0))
-
-pred.table$predictClass <- 0
-pred.table[pred.table$prediction > 0.92, "predictClass"] <- 1
-
-colnames(pred.table) <- c("OriginalType", "prediction", "predictClass")
-
-View(pred.table)
-data.frame(table(pred.table[, c("OriginalType", "predictClass")]))
-
-# we can see when we set up threshold to 0.92, there are only 4 Akt are classified as mTOR, all mTOR are classified correctly
-
-# below is for test only
-# classification model split data as traiin and test
-sample <- sample.int(n=nrow(dt.All.labeled), size=floor(0.8*nrow(dt.All.labeled)), replace=F)
-train <- dt.All.labeled[sample, ]
-test <- dt.All.labeled[-sample, ]
-
-model <- svm(Class~., data = train[, 2:17])
-summary(model)
-
-# test accuracy for test data
-pred <- predict(model, test[, 2:16])
-table(pred, test$Class)
-
-```
-
-
-# approach 2
-# step 2 - use the same model to predict unlabled data, and set up threshold to 0.92
-```{r}
-prediction.unlabeled <- predict(model.SVM, dt.All.unlabeled[, 2:16])
-
-pred.table.unlabled <- cbind(dt.All.unlabeled[,17], prediction.unlabeled)
-pred.table.unlabled <- as.data.frame.matrix(pred.table.unlabled)
-
-#sort pred table by prediction 
-pred.table.unlabled <- pred.table.unlabled[order(pred.table.unlabled$prediction), ]
-
-#set up threshold 0.92
-pred.table.unlabled$predictClass <- 0
-pred.table.unlabled[pred.table$prediction > 0.92, "predictClass"] <- 1
-
-colnames(pred.table.unlabled) <- c("OriginalType", "prediction", "predictClass")
-
-View(pred.table.unlabled)
-data.frame(table(pred.table.unlabled[, c("OriginalType", "predictClass")]))
-
-```
-
-
-
-
-
-
-
-
-
-
-
-# approach 3 - use naive bayes classification build model based on 60% labeled data, then to predict 40% labeled data, then build self training model
-# this approach failed
-```{r}
-
-func <- function(m,d) {
-   p <- predict(m,d,type='raw')
-   data.frame(cl=colnames(p)[apply(p,1,which.max)],p=apply(p,1,max))
-}
-
-# Set Seed so that same sample can be reproduced in future also
-set.seed(101) 
-
-# Now Selecting 60% of labeled data and combine with unlabeled data   
-sample <- sample.int(n = nrow(dt.Akt.labeled), size=floor(.6*nrow(dt.Akt.labeled)), replace = F)
-dt.Akt.labeled.train <- dt.Akt.labeled[sample, ]
-dt.Akt.labeled.test <- dt.Akt.labeled[-sample, ]
-#View(dt.Akt.labeled.train)
-#dim(dt.Insulin)
-#dim(dt.Akt.labeled)
-
-dt.Akt.train <- rbind(dt.Akt.labeled.train, dt.Insulin.New[!(dt.Insulin.New$Identifier %in% dt.Akt$V1),])
-
-
-nbAkt <- naiveBayes(Class ~ ., dt.Akt.labeled.train)
-summary(nbAkt)
-
-table(predict(nbAkt,dt.Akt.labeled.test),dt.Akt.labeled.test$Class)
-nbAktST <- SelfTrain(Class ~ .,dt.Akt.train,learner('naiveBayes',list()),'func')
-table(predict(nbAktST,dt.Akt.labeled.test),dt.Akt.labeled.test$Class)
-
-```
-# approach 4 - linear separation  
-```{r}
-
-svm.linear <- svm(Class ~ ., data=dt.Insulin.New, kernel = 'linear', type ='C-classification')
-summary(svm.linear)
-
-```
-
-# approach 4a - 10 folder cross validation - got error
-```{r}
-
-
-# define training control - uses 10-fold cross validation with 3 repeats
-control <- trainControl(method="repeatedcv", number=10, repeats=3)
-seed <- 7
-
-metric <- "Accuracy"
-
-#unique(dt.Insulin.New$Class)
-
-# SVM Linear
-set.seed(seed)
-fit.svmLinear <- train(Class~., data=dt.Insulin.New, method="svmLinear", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
-
-# SVM Polynomial
-set.seed(seed)
-fit.svmPolynomial <- train(Class~., data=dt.Insulin.New, method="svmPoly", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
-
-# SVM Radial
-set.seed(seed)
-fit.svmRadial <- train(Class~., data=dt.Insulin.New, method="svmRadial", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
-
-# Linear Discriminant Analysis
-set.seed(seed)
-fit.lda <- train(Class~., data=dt.Insulin.New, method="lda", metric=metric, preProc=c("center", "scale"), trControl=control)
-
-results <- resamples(list(svmL=fit.svmLinear, svmP=fit.svmPolynomial, svmR=fit.svmRadial, svmLda=fit.lda))
-# Table comparison
-summary(results)
-
-# boxplot comparison
-bwplot(results)
-# Dot-plot comparison
-dotplot(results)
-```
-
-# 
-```{r}
-library(RSSL)
-library(dplyr,warn.conflicts = FALSE)
-library(ggplot2,warn.conflicts = FALSE)
-
-# Train classifier
-g_nm <- NearestMeanClassifier(Class~.,dt.Insulin.New)
-g_self <- SelfLearning(Class~.,dt.Insulin.New,
-                       method=NearestMeanClassifier,
-                       prior=matrix(0.5,2))
-
-# Plot dataset
-df %>% 
-  ggplot(aes(x=X1,y=X2,color=Class,size=Class)) +
-  geom_point() +
-  coord_equal() +
-  scale_size_manual(values=c("-1"=3,"1"=3), na.value=1) +
-  geom_linearclassifier("Supervised"=g_nm,
-                  "Semi-supervised"=g_self)
-```
-
-# separate labelled data as 60/40, combine 60% labeled with unlabeled data to train model, and use the 40% labeled for testing
-```{r}
-# Set Seed so that same sample can be reproduced in future also
-set.seed(101) 
-
-# Now Selecting 60% of labeled data and combine with unlabeled data   
-sample <- sample.int(n = nrow(dt.Akt.labeled), size=floor(.6*nrow(dt.Akt.labeled)), replace = F)
-dt.Akt.labeled.train <- dt.Akt.labeled[sample, ]
-dt.Akt.labeled.test <- dt.Akt.labeled[-sample, ]
-View(dt.Akt.labeled.train)
-#dim(dt.Insulin)
-#dim(dt.Akt.labeled)
-
-dt.Akt.train <- rbind(dt.Akt.labeled.train, dt.Insulin[!(dt.Insulin$Identifier %in% dt.Akt$V1),])
-
-dim(dt.Akt.train)
-dim(dt.Akt.labeled.test)
-
 
 ```
 
