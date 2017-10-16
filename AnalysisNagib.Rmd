@@ -174,8 +174,8 @@ getMatchScore <- function(seq, PSSM) {
   
 }
 
-dt.unlabelled$aktMotif <- lapply(dt.unlabelled$Seq.Window, getMatchScore, PSSM=aktSequences.pfm)
-dt.unlabelled$mTORMotif <- lapply(dt.unlabelled$Seq.Window, getMatchScore, PSSM=mTORSequences.pfm)
+dt.unlabelled$aktMotif <- as.numeric(lapply(dt.unlabelled$Seq.Window, getMatchScore, PSSM=aktSequences.pfm))
+dt.unlabelled$mTORMotif <- as.numeric(lapply(dt.unlabelled$Seq.Window, getMatchScore, PSSM=mTORSequences.pfm))
 
 ```
 
