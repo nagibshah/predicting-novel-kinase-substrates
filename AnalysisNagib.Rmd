@@ -184,6 +184,9 @@ dt.unlabelled$mTORMotif <- as.numeric(lapply(dt.unlabelled$Seq.Window, getMatchS
 ```{r}
 
 head(dt.unlabelled)
+max(dt.unlabelled$aktMotif)
+min(dt.unlabelled$aktMotif)
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
