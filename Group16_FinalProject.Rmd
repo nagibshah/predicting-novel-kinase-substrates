@@ -19,12 +19,22 @@ install.packages("randomForest")
 install.packages("RecordLinkage")
 install.packages("knitr")
 install.packages("XLConnect")
+install.packages("class")
+
+## try http:// if https:// URLs are not supported
+source("https://bioconductor.org/biocLite.R")
+biocLite("Biostrings")
+
+#install if necessary
+source("http://bioconductor.org/biocLite.R")
+biocLite("seqLogo")
+
 ```
 
 # set up your root working directory
 ```{r, warning=FALSE}
 require(knitr)
-opts_knit$set(root.dir = "C:/Archive/MyUniStudy/STAT5003/Final project/Final project/Datasets")
+opts_knit$set(root.dir = "C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project/Datasets")
 
 ```
 
@@ -46,9 +56,8 @@ library(lubridate)
 library(stringr)
 library(rpart)
 library(data.table)
-library(doMC)
 library(tidyr)
-#install.packages("class")
+
 ```
 
 # Read data
@@ -113,7 +122,7 @@ pairs(Kinases~., dt.labeled[,filteredFeatures], col=dt.labeled[,filteredFeatures
 
 
 # seq.window pattern transformation
-```{r}
+```{r, warning=FALSE}
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
@@ -123,10 +132,6 @@ dt.Insulin$Seq.Window <- as.character(dt.Insulin$Seq.Window)
 # total of 13 amino acids in the sequence window
 phosphoSites.Akt.allSequences <- substr(dt.labeled.Akt$Seq.Window, 1,13)
 phosphoSites.mTOR.allSequences <- substr(dt.labeled.mTOR$Seq.Window, 1,13)
-
-## try http:// if https:// URLs are not supported
-#source("https://bioconductor.org/biocLite.R")
-#biocLite("Biostrings")
 
 # akt sequences
 aktSequences <-  t(data.frame(strsplit(phosphoSites.Akt.allSequences, "")))
@@ -166,10 +171,6 @@ barplot(mTORSequences.pfm, col=brewer.pal(nrow(mTORSequences.pfm), "Paired"),
 #   + The higher the score is, the higher is the probability that the sequence contains the searched motif.
 #   + Convert the sequence window in the unlabelled dataset to a sum based on the Position-specific Scoring Matrix (PSSM)
 
-#install if necessary
-#source("http://bioconductor.org/biocLite.R")
-#biocLite("seqLogo")
- 
 library(seqLogo)
 
 # motif calculations function 
@@ -213,7 +214,7 @@ dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
 ```
 
 # feature extraction 
-```{r}
+```{r, warning=FALSE}
 # this part reference PengYi's code ....
 str(dt.Insulin)
 dt.Insulin.feat <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m")]
@@ -251,12 +252,12 @@ head(dt.Insulin)
 ```
 
 # feature selection 
-```{r}
+```{r, warning=FALSE}
 
 ```
 
 # build SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data 
-```{r}
+```{r, warning=FALSE}
 
 # function to build model 
 model.func <- function (dt.full, dt.labeled) {
@@ -293,6 +294,11 @@ return(dt.final)
   
 }
 
+```
+
+# prediction output
+```{r, warning=FALSE}
+
 # check data before build model
 dim(dt.Insulin)
 dim(dt.Akt)
@@ -326,14 +332,18 @@ dim(dt.mTOR.motif)
 mTOR.final.motif <- model.func(dt.mTOR.motif, dt.mTOR)
 mTOR.final.motif[mTOR.final.motif$Class==1, ]
 mTOR.final.motif[mTOR.final.motif$Identifier %in% dt.Akt$V1, ]
-
 ```
 
 
+# Validation
 ```{r}
+
+```
+
 # compares prediction diff
 # 1. use bootstraping to calculate confidence interval of average difference 
 # 2. generates a plot to show distribution of difference 
+```{r}
 
 diff.func <- function (type, dt.original, dt.prediction, title) {
 
@@ -364,7 +374,6 @@ ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50) +ggtitle(paste0(titl
 options(java.parameters = "-Xmx4g" )
 require(XLConnect)
 
-setwd("C:/Archive/MyUniStudy/STAT5003/Final project/Final project/Datasets")
 wb = loadWorkbook("Prediction_2016.xlsx")
 df.Akt = readWorksheet(wb, sheet = "Akt_prediction", header = TRUE)
 df.mTOR = readWorksheet(wb, sheet = "mTOR_prediction", header = TRUE)
@@ -387,15 +396,8 @@ diff.func ("predictResult", df.mTOR, mTOR.final.motif, "mTOR Motif Model - ")
 
 ```
 
-
-# text mining to find similarity of seq.window
+# Output session information
 ```{r}
-
-
-```
-
-# Validation
-```{r}
-
+sessionInfo()
 ```
 
