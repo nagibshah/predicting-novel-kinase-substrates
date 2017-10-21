@@ -42,6 +42,7 @@ dt.labelled$Identifier <- NULL
 dt.labelled$Kinases <- as.factor(dt.labelled$Kinases) # only two classes so set as a factor
 dt.labelled$Kinases <- as.numeric(dt.labelled$Kinases) # only two classes so set as a factor
 dt.labelled$Seq.Window <- as.character(dt.labelled$Seq.Window) # convert from factor to character
+dt.Insulin$Seq.Window <- as.character(dt.Insulin$Seq.Window) # convert from factor to character
 head(dt.labelled)
 str(dt.labelled)
 
@@ -105,12 +106,18 @@ colnames(mTORSequences) <- paste("", 1:13, sep = "")
 # generate the consensus Matrix 
 library(Biostrings)
 
-aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences, as.prob = T)
+aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences)#, as.prob = T)
 colnames(aktSequences.pfm) <- colnames(aktSequences)
 
-mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences, as.prob = T) #as.prob = TRUE
+mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences) #, as.prob = T) #as.prob = TRUE
 colnames(mTORSequences.pfm) <- colnames(mTORSequences)
 
+```
+
+
+```{r}
+aktSequences.pfm
+mTORSequences.pfm
 ```
 
 ## visualise the patterns
@@ -148,6 +155,12 @@ barplot(mTORSequences.pfm, col=brewer.pal(nrow(mTORSequences.pfm), "Paired"),
  
 library(seqLogo)
 
+aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences, as.prob = T)
+colnames(aktSequences.pfm) <- colnames(aktSequences)
+
+mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences, as.prob = T) 
+colnames(mTORSequences.pfm) <- colnames(mTORSequences)
+
 #create position weight matrix
 #mef2 <- apply(dftest, 1, proportion)
 #mef2 <- makePWM(mef2)
@@ -171,11 +184,15 @@ getMatchScore <- function(seq, PSSM) {
    
   #max score
   #sum(apply(mm,2,max))
-  
 }
 
-dt.unlabelled$aktMotif <- as.numeric(lapply(dt.unlabelled$Seq.Window, getMatchScore, PSSM=aktSequences.pfm))
-dt.unlabelled$mTORMotif <- as.numeric(lapply(dt.unlabelled$Seq.Window, getMatchScore, PSSM=mTORSequences.pfm))
+getPercentageMatch <- function (score, max) {
+  # normalise score to 0-1
+  score / max
+}
+
+dt.Insulin$aktMotif <- as.numeric(lapply(dt.Insulin$Seq.Window, getMatchScore, PSSM=aktSequences.pfm))
+dt.Insulin$mTORMotif <- as.numeric(lapply(dt.Insulin$Seq.Window, getMatchScore, PSSM=mTORSequences.pfm))
 
 ```
 
@@ -183,9 +200,20 @@ dt.unlabelled$mTORMotif <- as.numeric(lapply(dt.unlabelled$Seq.Window, getMatchS
 
 ```{r}
 
-head(dt.unlabelled)
-max(dt.unlabelled$aktMotif)
-min(dt.unlabelled$aktMotif)
+maxMotifAkt <- max(dt.Insulin$aktMotif)
+minMotifAkt <- min(dt.Insulin$aktMotif)
+maxMotifmTOR <- max(dt.Insulin$mTORMotif)
+minMotifmTOR <- min(dt.Insulin$mTORMotif)
+
+# normalised score
+dt.Insulin$aktMotifMatch <- as.numeric(lapply(dt.Insulin$aktMotif, getPercentageMatch, max=maxMotifAkt))
+dt.Insulin$mTORMotifMatch <- as.numeric(lapply(dt.Insulin$mTORMotif, getPercentageMatch, max=maxMotifmTOR))
+
+max(dt.Insulin$aktMotifMatch)
+max(dt.Insulin$mTORMotifMatch)
+
+
+head(dt.Insulin)
 
 ```
 

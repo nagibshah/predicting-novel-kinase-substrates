@@ -8,26 +8,27 @@ output: html_document
 ---
 
 # install packages 
-```{r}
-install.packages("tibble") # this is for RSSL
-install.packages("RSSL")
-install.packages("upclass")
-install.packages("mclust")
-install.packages("caret")
-install.packages("lme4")
-install.packages("randomForest")
-install.packages("RecordLinkage")
-install.packages("knitr")
-install.packages("XLConnect")
-install.packages("class")
+```{r, echo=FALSE, warning=FALSE}
+#install.packages("tibble") # this is for RSSL
+#install.packages("RSSL")
+#install.packages("upclass")
+#install.packages("mclust")
+#install.packages("caret")
+#install.packages("lme4")
+#install.packages("randomForest")
+#install.packages("RecordLinkage")
+#install.packages("knitr")
+#install.packages("XLConnect")
+#install.packages("class")
 
 ## try http:// if https:// URLs are not supported
-source("https://bioconductor.org/biocLite.R")
-biocLite("Biostrings")
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("Biostrings")
 
 #install if necessary
-source("http://bioconductor.org/biocLite.R")
-biocLite("seqLogo")
+#source("http://bioconductor.org/biocLite.R")
+#biocLite("seqLogo")
+#install.packages("gbm")
 
 ```
 
@@ -63,12 +64,12 @@ library(tidyr)
 # Read data
 ```{r}
 # load full data set
-dt.Insulin <- read.delim("InsulinPhospho.txt")
+dt.Insulin <- read.delim("datasets/InsulinPhospho.txt")
 #dim(dt.Insulin)
 
 # load partially labeled data set
-dt.Akt <- read.delim("Akt_substrates.txt", header = F)
-dt.mTOR <- read.delim("mTOR_substrates.txt", header = F)   
+dt.Akt <- read.delim("datasets/Akt_substrates.txt", header = F)
+dt.mTOR <- read.delim("datasets/mTOR_substrates.txt", header = F)   
 #dim(dt.Akt)
 #dim(dt.mTOR)
 
@@ -120,8 +121,8 @@ pairs(Kinases~., dt.labeled[,filteredFeatures], col=dt.labeled[,filteredFeatures
 
 ```
 
-
 # seq.window pattern transformation
+
 ```{r, warning=FALSE}
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
@@ -144,11 +145,17 @@ colnames(mTORSequences) <- paste("", 1:13, sep = "")
 # generate the consensus Matrix 
 library(Biostrings)
 
-aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences, as.prob = T)
+aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences) #, as.prob = T)
 colnames(aktSequences.pfm) <- colnames(aktSequences)
 
-mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences, as.prob = T) #as.prob = TRUE
+mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences) # , as.prob = T) #as.prob = TRUE
 colnames(mTORSequences.pfm) <- colnames(mTORSequences)
+
+```
+
+## visualise the patterns 
+
+```{r}
 
 # visualise the patterns
 library(RColorBrewer)
@@ -165,6 +172,12 @@ barplot(mTORSequences.pfm, col=brewer.pal(nrow(mTORSequences.pfm), "Paired"),
             args.legend=list(x=ncol(mTORSequences.pfm)+5,y=max(colSums(mTORSequences.pfm))+4,bty = "n"),
             main="mTOR Sequence Window patterns")
 
+```
+
+## pattern match score 
+
+```{r}
+
 # Pattern match score
 # * Basic Formula  
 #   + With the probabbility matrix (PSSM) it is possible to calculate a total score for a specific sequence
@@ -172,6 +185,12 @@ barplot(mTORSequences.pfm, col=brewer.pal(nrow(mTORSequences.pfm), "Paired"),
 #   + Convert the sequence window in the unlabelled dataset to a sum based on the Position-specific Scoring Matrix (PSSM)
 
 library(seqLogo)
+
+aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences, as.prob = T)
+colnames(aktSequences.pfm) <- colnames(aktSequences)
+
+mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences, as.prob = T) 
+colnames(mTORSequences.pfm) <- colnames(mTORSequences)
 
 # motif calculations function 
 getMatchScore <- function(seq, PSSM) {
@@ -194,10 +213,29 @@ getMatchScore <- function(seq, PSSM) {
   
 }
 
+getPercentageMatch <- function (score, max) {
+  # normalise score to 0-1
+  score / max
+}
+
 dt.Insulin$AktMotif <- as.numeric(lapply(dt.Insulin$Seq.Window, getMatchScore, PSSM=aktSequences.pfm))
 dt.Insulin$mTORMotif <- as.numeric(lapply(dt.Insulin$Seq.Window, getMatchScore, PSSM=mTORSequences.pfm))
 
+maxMotifAkt <- max(dt.Insulin$AktMotif)
+minMotifAkt <- min(dt.Insulin$AktMotif)
+maxMotifmTOR <- max(dt.Insulin$mTORMotif)
+minMotifmTOR <- min(dt.Insulin$mTORMotif)
+
+# normalised score
+dt.Insulin$aktMotifMatch <- as.numeric(lapply(dt.Insulin$AktMotif, getPercentageMatch, max=maxMotifAkt))
+dt.Insulin$mTORMotifMatch <- as.numeric(lapply(dt.Insulin$mTORMotif, getPercentageMatch, max=maxMotifmTOR))
+
+
+```
+
 # summary of the new features motif
+
+```{r}
 #View(dt.unlabeled)
 head(dt.Insulin)
 unique(dt.Insulin$Kinases)
@@ -210,10 +248,10 @@ min(dt.Insulin$mTORMotif)
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
-
 ```
 
 # feature extraction 
+
 ```{r, warning=FALSE}
 # this part reference PengYi's code ....
 str(dt.Insulin)
@@ -249,6 +287,8 @@ dt.Insulin <- merge(dt.Insulin, dt.Insulin.feat, by=c("Identifier", "X15s", "X30
 dt.Insulin$X0s <- NULL
 head(dt.Insulin)
 
+# average fold and average score are the same. already provided
+
 ```
 
 # feature selection 
@@ -271,26 +311,26 @@ model.func <- function (dt.full, dt.labeled) {
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
   
-for (i in 1:200) {
+  for (i in 1:200) {
+    
+    dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
+    
+    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.nolabel.sample)
+    
+    # build SVM classification model incl probability -- temporarily without seq.window
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], type="C-classification", decision.values = TRUE, probability=TRUE)
+    
+    pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
   
-  dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
+    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
+    
+  }
+    
+  dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
+  names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
   
-  dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.nolabel.sample)
-  
-  # build SVM classification model incl probability -- temporarily without seq.window
-  fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], type="C-classification", decision.values = TRUE, probability=TRUE)
-  
-  pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
-
-  dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
-  names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
-  
-}
-  
-dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
-names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
-
-return(dt.final)
+  return(dt.final)
   
 }
 
@@ -313,7 +353,7 @@ Akt.final.fullmodel[Akt.final.fullmodel$Class==1, ]
 Akt.final.fullmodel[Akt.final.fullmodel$Identifier %in% dt.mTOR$V1, ]
 
 # SVM to predict Akt - motif model 
-dt.Akt.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score", "AktMotif")]
+dt.Akt.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score", "aktMotifMatch")]
 dim(dt.Akt.motif)
 Akt.final.motif <- model.func(dt.Akt.motif, dt.Akt)
 Akt.final.motif[Akt.final.motif$Class==1, ]
@@ -327,7 +367,7 @@ mTOR.final.fullmodel[mTOR.final.fullmodel$Class==1, ]
 mTOR.final.fullmodel[mTOR.final.fullmodel$Identifier %in% dt.Akt$V1, ]
 
 # SVM to predict mTOR - motif model 
-dt.mTOR.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score", "mTORMotif")]
+dt.mTOR.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score", "mTORMotifMatch")]
 dim(dt.mTOR.motif)
 mTOR.final.motif <- model.func(dt.mTOR.motif, dt.mTOR)
 mTOR.final.motif[mTOR.final.motif$Class==1, ]
@@ -372,9 +412,9 @@ ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50) +ggtitle(paste0(titl
 
 # load prediction_2016 result
 options(java.parameters = "-Xmx4g" )
-require(XLConnect)
+library(XLConnect)
 
-wb = loadWorkbook("Prediction_2016.xlsx")
+wb = loadWorkbook("datasets/Prediction_2016.xlsx")
 df.Akt = readWorksheet(wb, sheet = "Akt_prediction", header = TRUE)
 df.mTOR = readWorksheet(wb, sheet = "mTOR_prediction", header = TRUE)
 
