@@ -438,19 +438,25 @@ backwardStepwise <- function(train, cls.train, sortedFeatures) {
 ```{r}
 
 # carry out t-test to sort features
-features <- tstatSort(dt.feature.selection.akt)
-
+featuresAkt <- tstatSort(dt.feature.selection.akt)
 # sorted features 
-features
-
+featuresAkt
 # best feature as per t-test
-features[1]
+featuresAkt[1]
+
+# carry out t-test to sort features
+featuresmTOR <- tstatSort(dt.feature.selection.mTOR)
+# sorted features 
+featuresmTOR
+# best feature as per t-test
+featuresmTOR[1]
 
 ```
 ## forward stepwise 
+### akt 
 ```{r}
 
-forwardFeatures <- c(features[1])
+forwardFeatures <- c(featuresAkt[1])
 # select the 2 to x best features using knn as a wrapper classifier
 for (j in 2:ncol(dt.feature.selection.akt)) { # ncol(dt.feature.selection.akt)
   selected.i <- selectFeature(train = dt.feature.selection.akt[,-17],
@@ -463,21 +469,66 @@ for (j in 2:ncol(dt.feature.selection.akt)) { # ncol(dt.feature.selection.akt)
 }
 
 ```
+### mtor 
+
+```{r}
+
+forwardFeatures <- c(featuresmTOR[1])
+# select the 2 to x best features using knn as a wrapper classifier
+for (j in 2:ncol(dt.feature.selection.mTOR)) { # ncol(dt.feature.selection.akt)
+  selected.i <- selectFeature(train = dt.feature.selection.mTOR[,-17],
+                              cls.train = dt.feature.selection.mTOR[,17],
+                              features = forwardFeatures)
+  print(selected.i)
+
+  # add the best feature from current run
+  forwardFeatures <- c(forwardFeatures, selected.i)
+}
+
+```
+
 ## backward stepwise 
 
 ```{r}
 
-test.accuracies <- backwardStepwise(train = dt.feature.selection.akt[,-17],
+test.accuracies.akt <- backwardStepwise(train = dt.feature.selection.akt[,-17],
                                     cls.train = dt.feature.selection.akt[,17],
-                                    sortedFeatures = features)
+                                    sortedFeatures = featuresAkt)
+
+test.accuracies.mtor <- backwardStepwise(train = dt.feature.selection.mTOR[,-17],
+                                    cls.train = dt.feature.selection.mTOR[,17],
+                                    sortedFeatures = featuresmTOR)
 
 ```
-# plot the results for backwards selection 
+
+## plot the results for backwards selection 
+
+### akt plots
 
 ```{r}
 
-plot(rev(test.accuracies),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted")
+plot(rev(test.accuracies.akt),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy akt")
 axis(1, at=seq(1, 16, by = 1), las=2)
+
+```
+
+### mtor plots
+
+```{r}
+
+plot(rev(test.accuracies.mtor),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mtor")
+axis(1, at=seq(1, 16, by = 1), las=2)
+
+```
+## feature selection results 
+```{r}
+
+# akt features 
+print("For Akt - 2 most important features yield the best result")
+featuresAkt[1:2]
+# mtor features 
+print("For mTOR -  5 most important features yield the best result")
+featuresAkt[1:5]
 
 ```
 
