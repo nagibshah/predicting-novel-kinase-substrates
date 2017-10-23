@@ -1,0 +1,616 @@
+---
+title: "Group16_Project2"
+group: 16
+member: Nagib Shah / Ling Qi / Xinan Ma / Young Choi
+author: "Ling Qi"
+date: "19 September 2017"
+output: html_document
+---
+
+# install packages 
+```{r, warning=FALSE}
+install.packages("tibble") # this is for RSSL
+install.packages("RSSL")
+install.packages("upclass")
+install.packages("mclust")
+install.packages("caret")
+install.packages("lme4")
+install.packages("randomForest")
+install.packages("RecordLinkage")
+install.packages("knitr")
+install.packages("XLConnect")
+install.packages("class")
+install.packages("purrr")
+install.packages("mlbench")
+install.packages("adabag")
+install.packages("kknn")
+install.packages("fastAdaboost")
+install.packages("gbm")
+install.packages("lattice")
+install.packages("ggplot2")
+install.packages("Rcpp")
+install.packages("caret")
+install.packages("ddalpha")
+install.packages("tidyr")
+## try http:// if https:// URLs are not supported
+source("https://bioconductor.org/biocLite.R")
+biocLite("Biostrings")
+
+#install if necessary
+source("http://bioconductor.org/biocLite.R")
+biocLite("seqLogo")
+
+```
+
+# call libraries 
+```{r, warning=FALSE}
+library(mclust)
+library(upclass)
+library(RSSL)
+library(e1071)
+library(caret)
+library(randomForest)
+library(dplyr)
+library(class)
+library(e1071)
+library(gbm)
+library(ggplot2)
+library(scales)
+library(lubridate)
+library(stringr)
+library(rpart)
+library(data.table)
+library(tidyr)
+library(mlbench)
+library(kknn)
+library(fastAdaboost)
+library(gbm)
+
+```
+
+# Read data
+```{r, warning=FALSE}
+
+setwd("C:/Archive/MyUniStudy/STAT5003/Final project/Final project/Datasets")
+#setwd("C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project/Datasets")
+# load full data set
+dt.Insulin <- read.delim("InsulinPhospho.txt")
+#dim(dt.Insulin)
+
+# load partially labeled data set
+dt.Akt <- read.delim("Akt_substrates.txt", header = F)
+dt.mTOR <- read.delim("mTOR_substrates.txt", header = F)   
+#dim(dt.Akt)
+#dim(dt.mTOR)
+
+# map labled to the full data set 
+dt.Insulin$Kinases[dt.Insulin$Identifier %in% dt.Akt$V1] <- "Akt"
+dt.Insulin$Kinases[dt.Insulin$Identifier %in% dt.mTOR$V1] <- "mTOR"
+unique(dt.Insulin$Kinases)
+# generate a subset of the labelled data 
+dt.labeled <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt' | dt.Insulin$Kinases == 'mTOR'), ]
+
+```
+
+# summarize data 
+```{r, warning=FALSE}
+
+head(dt.Insulin)
+head(dt.labeled)
+
+# remove the identifier column since it is just a phosphorilation site  
+dt.labeled$Identifier <- NULL
+dt.labeled$Kinases <- as.factor(dt.labeled$Kinases) # only two classes so set as a factor
+dt.labeled$Kinases <- as.numeric(dt.labeled$Kinases) # only two classes so set as a factor
+dt.labeled$Seq.Window <- as.character(dt.labeled$Seq.Window) # convert from factor to character
+head(dt.labeled)
+str(dt.labeled)
+
+```
+
+# Analysize data 
+# Attempt to do a pairwise plot of the features to understand if the labelled data is separable
+```{r, warning=FALSE}
+
+library(lattice)
+library(ggplot2)
+
+filteredFeatures <- c("Avg.Fold","AUC","Ins.1","Ins.2","LY","MK","Kinases")
+temporalFeatures <- c("X15s","X30s","X1m","X2m","X5m","X10m","X20m","X60m","Kinases")
+
+# try plotting the temporal data 
+pairs(Kinases~., dt.labeled[,temporalFeatures], col=dt.labeled[,temporalFeatures]$Kinases)
+
+# try plotting the other features 
+# pair-wise scatterplots colored by class
+pairs(Kinases~., dt.labeled[,filteredFeatures], col=dt.labeled[,filteredFeatures]$Kinases)
+
+### appears to indicate that the labeled data can be separated. Thinking SVM should work.
+
+```
+
+# seq.window pattern transformation - motif
+```{r, warning=FALSE}
+
+dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
+dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
+dt.Insulin$Seq.Window <- as.character(dt.Insulin$Seq.Window)
+
+# 7th Position is the phospho site
+# total of 13 amino acids in the sequence window
+phosphoSites.Akt.allSequences <- substr(dt.labeled.Akt$Seq.Window, 1,13)
+phosphoSites.mTOR.allSequences <- substr(dt.labeled.mTOR$Seq.Window, 1,13)
+
+# akt sequences
+aktSequences <-  t(data.frame(strsplit(phosphoSites.Akt.allSequences, "")))
+colnames(aktSequences) <- paste("", 1:13, sep = "")
+
+# mtor sequences
+mTORSequences <-  t(data.frame(strsplit(phosphoSites.mTOR.allSequences, "")))
+colnames(mTORSequences) <- paste("", 1:13, sep = "")
+
+# generate the consensus Matrix 
+library(Biostrings)
+
+aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences, as.prob = T)
+colnames(aktSequences.pfm) <- colnames(aktSequences)
+
+mTORSequences.pfm <- consensusMatrix(phosphoSites.mTOR.allSequences, as.prob = T) #as.prob = TRUE
+colnames(mTORSequences.pfm) <- colnames(mTORSequences)
+
+# visualise the patterns
+library(RColorBrewer)
+
+par(mfrow=c(1, 1), mar=c(3, 3, 3, 3) + 0.1)
+barplot(aktSequences.pfm, col=brewer.pal(nrow(aktSequences.pfm), "Paired"),
+            legend.text = rownames(aktSequences.pfm),
+            args.legend=list(x=ncol(aktSequences.pfm) + 5,y=max(colSums(aktSequences.pfm))+4,bty = "n"),
+            main="Akt Sequence Window patterns")
+
+par(mfrow=c(1, 1), mar=c(3, 3, 3, 3) + 0.1)
+barplot(mTORSequences.pfm, col=brewer.pal(nrow(mTORSequences.pfm), "Paired"),
+            legend.text = rownames(mTORSequences.pfm),
+            args.legend=list(x=ncol(mTORSequences.pfm)+5,y=max(colSums(mTORSequences.pfm))+4,bty = "n"),
+            main="mTOR Sequence Window patterns")
+
+# Pattern match score
+# * Basic Formula  
+#   + With the probabbility matrix (PSSM) it is possible to calculate a total score for a specific sequence
+#   + The higher the score is, the higher is the probability that the sequence contains the searched motif.
+#   + Convert the sequence window in the unlabelled dataset to a sum based on the Position-specific Scoring Matrix (PSSM)
+
+library(seqLogo)
+
+# motif calculations function 
+getMatchScore <- function(seq, PSSM) {
+  x <- strsplit(x=seq,split='')
+  #x
+  #initialise vector to keep scores
+  seq_score <- vector()
+  #get the corresponding values from the PSSM
+  for (i in 1:nchar(seq)){
+    if (x[[1]][i] != "_") {
+      seq_score[i] <- PSSM[x[[1]][i],i]
+    }
+    else seq_score[i] = 0.00
+  }
+  #seq_score
+  sum(seq_score)
+   
+  #max score
+  #sum(apply(mm,2,max))
+  
+}
+
+dt.Insulin$AktMotif <- as.numeric(lapply(dt.Insulin$Seq.Window, getMatchScore, PSSM=aktSequences.pfm))
+dt.Insulin$mTORMotif <- as.numeric(lapply(dt.Insulin$Seq.Window, getMatchScore, PSSM=mTORSequences.pfm))
+
+# summary of the new features motif
+#View(dt.unlabeled)
+head(dt.Insulin)
+unique(dt.Insulin$Kinases)
+
+max(dt.Insulin$AktMotif)
+min(dt.Insulin$AktMotif)
+
+max(dt.Insulin$mTORMotif)
+min(dt.Insulin$mTORMotif)
+
+dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
+dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
+
+```
+
+# feature extraction 
+```{r, warning=FALSE}
+# this part reference PengYi's code ....
+str(dt.Insulin)
+dt.Insulin.feat <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m")]
+dt.Insulin.feat$X0s <- 0 
+head(dt.Insulin.feat)
+
+#### secondary feature 1
+# magnitude calculation (mathematical mean)
+average.score <- rowSums(dt.Insulin.feat[, 2:9]) / ncol(dt.Insulin.feat[, 2:9])
+names(average.score) <- rownames(dt.Insulin.feat)
+head(average.score)
+
+#### secondary feature 2
+# temporal profile fitting to check if the profile follows are good trend
+fitting.score <- c()
+for (i in 1:nrow(dt.Insulin)) {
+   y <- as.numeric(dt.Insulin[i, 2:10]);
+   x <- 2:10
+   x2 = x^2
+   lmfit <- lm(formula = y ~ x + x2 - 1)
+   f.stat <- summary(lmfit)$fstatistic
+   fitting.score <- c(fitting.score, f.stat[1])
+}
+fitted.score <- log2(fitting.score)
+names(fitted.score) <- rownames(dt.Insulin.feat)
+
+# combine extracted secondary features with primary features
+dt.Insulin.feat <- cbind(average.score, fitted.score, dt.Insulin.feat)
+head(dt.Insulin.feat)
+
+dt.Insulin <- merge(dt.Insulin, dt.Insulin.feat, by=c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m"))
+dt.Insulin$X0s <- NULL
+head(dt.Insulin)
+
+```
+
+# model analysis and select the best fit model 
+```{r, warning=FALSE}
+
+# use labeled data to evaluate different model performance, and decide the best classification model, ignore motif
+dt.mTOR.eval <- dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "Kinases")]
+dt.Akt.eval <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "Kinases")]
+
+# generate data set 
+dt.labeled.eval <- rbind(dt.mTOR.eval, dt.Akt.eval)
+
+# convert Kinases to numeric class
+dt.labeled.eval %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Kinases == "Akt", 1)) %>%
+    mutate(Kinases = NULL) %>%
+    mutate(Class = as.factor(Class)) -> dt.labeled.eval
+
+
+# prepare training scheme
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+
+# pick a few popular classification models to test performance
+set.seed(10)
+
+# knn model 
+modelKnn <- train(Class~., data=dt.labeled.eval, method="kknn", trControl=control)
+# LVQ model
+modelLvq <- train(Class~., data=dt.labeled.eval, method="lvq", trControl=control)
+# GBM model
+modelGbm <- train(Class~., data=dt.labeled.eval, method="gbm", trControl=control, verbose=FALSE)
+# SVM Radial model
+modelSvmR <- train(Class~., data=dt.labeled.eval, method="svmRadial", trControl=control)
+# SVM Linear model
+modelSvmL <- train(Class~., data=dt.labeled.eval, method="svmLinear", trControl=control)
+# SVM Polynomial model
+modelSvmP <- train(Class~., data=dt.labeled.eval, method="svmPoly", trControl=control)
+# AdaBoost model
+modelAda <- train(Class~., data=dt.labeled.eval, method="adaboost", trControl=control)
+
+# collect resamples results
+results <- resamples(list(KNN=modelKnn, LVQ=modelLvq, GBM=modelGbm, SVMR=modelSvmR, SVML=modelSvmL, SVMP=modelSvmP, ADA=modelAda))
+
+# summarize the distributions
+summary(results)
+# boxplots of results
+bwplot(results)
+# dot plots of results
+dotplot(results)
+
+# conclusion: based on Kappa mean value, GBM is the best model, the 2nd best is SVM Polynomial and knn
+
+```
+
+# feature selection 
+```{r, warning=FALSE}
+
+dt.feature.selection <- dt.Insulin[, c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "Kinases")]
+dim(dt.feature.selection)
+
+
+set.seed(10)
+
+# calculate correlation matrix
+correlationMatrix <- cor(dt.feature.selection[,-16])
+# summarize the correlation matrix
+print(correlationMatrix)
+# find attributes that are highly corrected (ideally >0.75)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+
+# print indexes of highly correlated attributes
+print(highlyCorrelated)
+
+# use labeled data to estimate variable importance
+set.seed(10)
+
+# prepare training scheme
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+
+# train the model
+model <- train(Class~., data=dt.labeled.eval, method="svmPoly", preProcess="scale", trControl=control)
+# estimate ROC curve variable importance
+importance <- varImp(model, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+
+```
+
+# build GBM & SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data 
+```{r, warning=FALSE}
+# we tried two models with different inbalance technic: SVM - bagging, GBM - boosting
+# function to build model
+model.func <- function (dt.model.full, dt.labeled, n, modelname, rank_flag) {
+
+  #dt.model.full <- dt.Akt.fulmodel
+  #dt.labeled <- dt.Akt
+  #n <- 5
+  
+  #dt.model.full <- dt.full
+  
+  dt.model.full %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) %>%
+    mutate(Class = as.factor(Class)) -> dt.model.full
+  
+  # data frame to store pred result
+  dt.result <- dt.model.full[, c("Identifier", "Class")]
+  
+  # data frame to store pred labeled obs
+  dt.pred.label <- dt.model.full # the same structure as dt.model.full
+  dt.pred.label <- dt.pred.label[0,] # remove all rows, keep column names
+  
+for (i in 1:1000) {
+  
+  dt.model.full %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.pred.label$Identifier, 1)) %>%
+    mutate(Class = as.factor(Class)) -> dt.model.full
+  #dim(dt.model.full[dt.model.full$Class==1,])
+  
+  # due to small size of labeled data, we bootstrap to make labeled data size n times, and randomly selected the same size of unlabled data for training, make total observation Akt n*22*2 = 880, mTOR n*26*2 = 1040 
+  dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(x=1:nrow(dt.model.full[dt.model.full$Class==-1, ]), size = (nrow(dt.labeled) + nrow(dt.pred.label))*n, replace = TRUE),]
+  dt.labeled.sample <- dt.model.full[dt.model.full$Class==1,]
+  #dt.labeled.sample[dt.labeled.sample$Class==1, ]
+  
+  dt.model <- rbind(dt.labeled.sample[sample(x=1:nrow(dt.labeled.sample), size=(nrow(dt.labeled) + nrow(dt.pred.label))*n, replace=TRUE), ], dt.nolabel.sample)
+  #dim(dt.model)
+  #head(dt.model)
+  #View(dt.model)
+  #unique(dt.model$Class)
+  #dt.model[dt.model$Class==1, ]
+  
+  if (modelname == "SVM") {
+    
+    set.seed(20)
+    
+    # build SVM classification model incl probability 
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel ="polynomial", type="C-classification", decision.values = TRUE, probability=TRUE)
+    
+    pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
+  
+    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    names(dt.result)[ncol(dt.result)] <- paste0(modelname, "_model_", i)
+  }
+  else if (modelname == "GBM") {
+    
+    # build gbm model 
+    set.seed(20)
+    
+    fit.model <- gbm(formula = Class ~ ., distribution = "multinomial", data = dt.model[, 2:ncol(dt.model)], verbose=FALSE, n.trees = 3000, shrinkage = .01, n.minobsinnode = 20)
+    #gbm.perf(dt.model, method="cv")
+    
+    # predict whole data 
+    pred.result <- predict(object = fit.model, newdata = dt.model.full[, 2:ncol(dt.model.full)-1], n.trees = 1500, type = "response")
+    
+    pred.0 <- as.data.frame.table(pred.result)
+    
+    library("tidyr")
+    pred <- pred.0 %>% spread(key = Var2, value = Freq)
+    
+    dt.result[, ncol(dt.result) + 1] <- pred[,4]
+    names(dt.result)[ncol(dt.result)] <- paste0(modelname, "_model_", i)
+  }
+  
+  if (rank_flag) {
+    # add ranking based on probabilities
+    dt.result <- transform(dt.result, 
+            prob.rank = ave(dt.result[,ncol(dt.result)], na.last = TRUE, 
+                            FUN = function(x) rank(-x, ties.method = "last")))
+    
+    # find the least ranking for labeled data, add obs with prob ranking < min value of labeled ranking, and probability > 0.99 to training set as positive
+    min.rank <- min(dt.result[dt.result$Class==1, ]$prob.rank)
+    
+    dt.pred.label <- dt.model.full[which(dt.model.full$Identifier %in% dt.result[dt.result$prob.rank < min.rank & dt.result[,ncol(dt.result)-1] >= 0.99, ]$Identifier), ]
+    
+    dt.result$prob.rank <- NULL
+    #head(dt.pred.label)   
+    #dim(dt.pred.label)
+    #View(dt.result)
+    #View(dt.pred.label)
+    #View(dt.test)
+  }
+  
+}
+  
+dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
+names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
+
+return(dt.final)
+  
+}
+
+```
+
+# prediction output
+```{r, warning=FALSE}
+
+# check data before build model
+dim(dt.Insulin)
+dim(dt.Akt)
+dim(dt.mTOR)
+
+# SVM to predict Akt - full model 
+# extract columns for Akt full model
+dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "AktMotif")]
+dim(dt.Akt.fulmodel)
+Akt.final.fullmodel.SVM <- model.func(dt.Akt.fulmodel, dt.Akt, 5, "SVM", TRUE)
+Akt.final.fullmodel.SVM[Akt.final.fullmodel.SVM$Class==1, ]
+Akt.final.fullmodel.SVM[Akt.final.fullmodel.SVM$Identifier %in% dt.mTOR$V1, ]
+write.csv(Akt.final.fullmodel.SVM, "Akt_final_fullmodel_SVM.csv")
+
+# GBM to predict Akt - full model 
+Akt.final.fullmodel.GBM <- model.func(dt.Akt.fulmodel, dt.Akt, 5, "GBM", TRUE)
+Akt.final.fullmodel.GBM[Akt.final.fullmodel.GBM$Class==1, ]
+Akt.final.fullmodel.GBM[Akt.final.fullmodel.GBM$Identifier %in% dt.mTOR$V1, ]
+write.csv(Akt.final.fullmodel.GBM, "Akt_final_fullmodel_GBM.csv")
+
+# SVM to predict Akt - motif model 
+#dt.Akt.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "AktMotif")]
+#dim(dt.Akt.motif)
+#Akt.final.motif.SVM <- model.func(dt.Akt.motif, dt.Akt)
+#Akt.final.motif.SVM[Akt.final.motif.SVM$Class==1, ]
+#Akt.final.motif.SVM[Akt.final.motif.SVM$Identifier %in% dt.mTOR$V1, ]
+
+# SVM to predict mTOR - full model 
+dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "mTORMotif")]
+dim(dt.mTOR.fulmodel)
+mTOR.final.fullmodel.SVM <- model.func(dt.mTOR.fulmodel, dt.mTOR, 5, "SVM", TRUE)
+mTOR.final.fullmodel.SVM[mTOR.final.fullmodel.SVM$Class==1, ]
+mTOR.final.fullmodel.SVM[mTOR.final.fullmodel.SVM$Identifier %in% dt.Akt$V1, ]
+write.csv(mTOR.final.fullmodel.SVM, "mTOR_final_fullmodel_SVM.csv")
+
+# SVM to predict mTOR - motif model 
+#dt.mTOR.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score", "mTORMotif")]
+#dim(dt.mTOR.motif)
+#mTOR.final.motif.SVM <- model.func(dt.mTOR.motif, dt.mTOR)
+#mTOR.final.motif.SVM[mTOR.final.motif.SVM$Class==1, ]
+#mTOR.final.motif.SVM[mTOR.final.motif.SVM$Identifier %in% dt.Akt$V1, ]
+
+# GBM to predict mTOR - full model 
+mTOR.final.fullmodel.GBM <- model.func(dt.mTOR.fulmodel, dt.mTOR, 5, "GBM", TRUE)
+mTOR.final.fullmodel.GBM[mTOR.final.fullmodel.GBM$Class==1, ]
+mTOR.final.fullmodel.GBM[mTOR.final.fullmodel.GBM$Identifier %in% dt.Akt$V1, ]
+write.csv(mTOR.final.fullmodel.GBM, "mTOR_final_fullmodel_GBM.csv")
+
+
+```
+
+# Validation
+```{r, warning=FALSE}
+
+# cross-validation - use all models to predict labeled data
+cv_func <- function (dt) {
+  
+  #dt <- Akt.final.fullmodel.SVM
+  #head(dt)
+  dt.cv <- rbind(dt[dt$Identifier %in% dt.mTOR$V1, ], dt[dt$Identifier %in% dt.Akt$V1, ])
+  dt.cv$predClass <- ifelse(dt.cv$predictResult > 0.5, 1, -1)
+  dt.cv <- dt.cv[, c("Class", "predClass")]
+  table(dt.cv)
+}
+
+
+# SVM Akt
+cv_func(Akt.final.fullmodel.SVM)
+
+# SVM mTOR
+cv_func(mTOR.final.fullmodel.SVM)
+
+# GBM Akt
+cv_func(Akt.final.fullmodel.GBM)
+
+# GBM mTOR
+cv_func(mTOR.final.fullmodel.GBM)
+
+print("conclusion: for all labled data, we consider Akt and mTOR as give positive and negative or vice verse depending on which type we are predicting, both SVM and GBM achieved 100% accuracy for Akt labled data, but when we predict mTOR, SVM model only achieved 68.75% accuracy rate, while GBM mTOR model achieved 100% accuracy rate, we think GBM is better model to predict both Akt and mTOR.")
+```
+
+# compares prediction diff
+# 1. use bootstraping to calculate confidence interval of average difference 
+# 2. generates a plot to show distribution of difference 
+```{r, warning=FALSE}
+
+diff.func <- function (type, dt.original, dt.prediction, title) {
+
+# bootstrap sample statistic (difference in prediction probability)
+B=1000  
+dt.original.B <- rep(0,B)
+dt.prediction.B <- rep(0,B)
+
+for ( i in 1:B ) {
+  dt.original.B[i] = mean(sample(dt.original[, grep(type, colnames(dt.original))], size = nrow(dt.original), replace = TRUE), na.rm = TRUE)
+  dt.prediction.B[i] = mean(sample(dt.prediction[, grep(type, colnames(dt.prediction))], size = nrow(dt.prediction), replace = TRUE), na.rm = TRUE)
+}
+
+b.diff<-(dt.original.B-dt.prediction.B)*100
+
+print(paste("95% Confidence Interval of Average(Bootstrap) difference in ", type, round(quantile(b.diff,0.05),2), round(quantile(b.diff,0.95),2)))
+
+dt.delta <- merge(dt.original[, c(which(colnames(dt.original)=="Identifier"), grep(type, colnames(dt.original)))], dt.prediction[, c(which(colnames(dt.prediction)=="Identifier"), grep(type, colnames(dt.prediction)))], by=("Identifier"))
+
+dt.delta$delta<-(dt.delta[,2]-dt.delta[,3])*100
+#dt.delta<-dt.delta[complete.cases(dt.delta$delta),] 
+
+ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50) +ggtitle(paste0(title, " Distribution of prediction difference 2016 minus 2017"))
+
+}
+
+# load prediction_2016 result
+options(java.parameters = "-Xmx4g" )
+require(XLConnect)
+
+setwd("C:/Archive/MyUniStudy/STAT5003/Final project/Final project/Datasets")
+#setwd("C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project/Datasets")
+wb = loadWorkbook("Prediction_2016.xlsx")
+df.Akt = readWorksheet(wb, sheet = "Akt_prediction", header = TRUE)
+df.mTOR = readWorksheet(wb, sheet = "mTOR_prediction", header = TRUE)
+
+df.Akt %>%
+  mutate(Identifier = paste0(str_trim(str_to_upper(df.Akt$GeneSymbol), side="both"), ";",str_trim(df.Akt$Phosphorylation.site, side="both"), ";" )) %>%
+  mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.Akt.full
+names(df.Akt.full)[colnames(df.Akt.full)=="Full.model.predict"] <- "predictResult" 
+names(df.Akt.full)[colnames(df.Akt.full)=="Motif.predict"] <- "AktMotif" 
+
+df.mTOR %>%
+  mutate(Identifier = paste0(str_trim(str_to_upper(df.mTOR$GeneSymbol), side="both"), ";",str_trim(df.mTOR$Phosphorylation.site, side="both"), ";" )) %>%
+  mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.mTOR.full
+names(df.mTOR.full)[colnames(df.mTOR.full)=="Full.model.predict"] <- "predictResult" 
+names(df.mTOR.full)[colnames(df.mTOR.full)=="Motif.predict"] <- "mTORMotif" 
+
+# SVM diff delta analysis
+diff.func ("predictResult", df.Akt.full, Akt.final.fullmodel.SVM, "Akt Full Model SVM - ")
+diff.func ("predictResult", df.mTOR.full, mTOR.final.fullmodel.SVM, "mTOR Full Model SVM - ")
+
+print("conclusion: we compare our prediction result with 2016 result, calculate the 95% confidence interval of average difference in prediction result, as well as a histogram to show delta distribution. From the chart, we can say GBM model for both Akt and mTOR prediction result are closer to 2016 result. ")
+
+
+# GBM diff delta analysis
+#diff.func ("predictResult", df.Akt.full, Akt.final.fullmodel.GBM, "Akt Full Model GBM - ")
+#diff.func ("predictResult", df.mTOR.full, mTOR.final.fullmodel.GBM, "mTOR Full Model GBM - ")
+
+#head(df.Akt.full)
+#head(dt.Insulin)
+# motif diff delta analysis
+#diff.func ("predictResult", df.Akt.full, dt.Insulin, "Akt Motif - ")
+#diff.func ("predictResult", df.mTOR.full, dt.Insulin, "mTOR Motif - ")
+
+```
+
+# Output session information
+```{r, echo=FALSE, warning=FALSE}
+sessionInfo()
+```
