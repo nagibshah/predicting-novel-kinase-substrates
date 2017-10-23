@@ -280,7 +280,7 @@ fitted.score <- log2(fitting.score)
 names(fitted.score) <- rownames(dt.Insulin.feat)
 
 # combine extracted secondary features with primary features
-dt.Insulin.feat <- cbind(average.score, fitted.score, dt.Insulin.feat)
+dt.Insulin.feat <- cbind(fitted.score, dt.Insulin.feat) # removed avg score since same as avg fold
 head(dt.Insulin.feat)
 
 dt.Insulin <- merge(dt.Insulin, dt.Insulin.feat, by=c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m"))
@@ -292,7 +292,192 @@ head(dt.Insulin)
 ```
 
 # feature selection 
+## setup
 ```{r, warning=FALSE}
+
+library(mlbench)
+library(caret)
+
+# total 16 features approx
+predictorsAkt <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","aktMotifMatch","Kinases")
+
+predictorsmTOR <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","mTORMotifMatch","Kinases")
+
+dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
+dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
+dt.unlabelled <- dt.Insulin[which(is.na(dt.Insulin$Kinases)), ]
+
+dt.feature.selection.akt <- dt.labeled.Akt[,predictorsAkt]
+dt.feature.selection.akt$Kinases <- 1
+dt.feature.selection.mTOR <- dt.labeled.mTOR[,predictorsmTOR]
+dt.feature.selection.mTOR$Kinases <- 1
+
+dim(dt.feature.selection.akt)
+dim(dt.feature.selection.mTOR)
+
+# pick 22 random for akt negatives
+aktNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.akt), replace = TRUE)
+temp <- dt.unlabelled[aktNeg, predictorsAkt]
+temp$Kinases <- -1
+dt.feature.selection.akt <- rbind(dt.feature.selection.akt, temp)
+temp <- NULL
+
+# pick 26 random mtor negatives
+mtorNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.mTOR), replace = TRUE)
+temp <- dt.unlabelled[mtorNeg, predictorsmTOR]
+temp$Kinases <- -1
+dt.feature.selection.mTOR <- rbind(dt.feature.selection.mTOR, temp)
+temp <- NULL
+
+# final sets for feature selection exercise
+dim(dt.feature.selection.akt)
+dim(dt.feature.selection.mTOR)
+```
+## helpers  
+```{r}
+
+tstatSort <- function (train) {
+  train.byClass <- split(train[,-17], train$Kinases)
+
+  # perform a t-test
+  feature.pvalues <- c()
+  for(i in 1:(ncol(train)-1)) {
+    feature.pvalues <- c(feature.pvalues, t.test(train.byClass[[1]][,i], train.byClass[[2]][,i])$p.value)
+  }
+  names(feature.pvalues) <- colnames(train[,-17])
+  
+  # filter the top most discriminative feature based on p-values
+  filtered.features <- names(sort(feature.pvalues)) #[1:10])
+  filtered.features
+}
+
+selectFeature <- function(train, cls.train, features) {
+  ## identify a feature to be selected
+  current.best.accuracy <- -Inf
+  selected.i <- NULL
+  for(i in 1:ncol(train)) {
+    current.f <- colnames(train)[i]
+    #print(paste("Iteration:", i))
+    #print(paste("Current col:", current.f))
+    if(!current.f %in% features) {
+      # carry out a LOOCV
+      set.seed(99)
+      fold <- createFolds(cls.train, k=nrow(train))
+      
+      test.accuracies <- c()
+      
+      for(i in 1:length(fold)) {
+        truth <- cls.train[fold[[i]]]
+        trainingData <- train[-fold[[i]], c(features, current.f)]
+        testingData <- train[fold[[i]],c(features, current.f)]
+        #print(truth)
+        svm.model <- svm(x=trainingData, y=cls.train[-fold[[i]]], kernel="polynomial", type="C-classification")
+        pred <- predict(svm.model, testingData)
+        #print(pred)
+        accuracy <- sum(pred == truth) / length(truth)
+        test.accuracies <- c(test.accuracies, accuracy)
+      }
+      
+      # take the avg test accuracy as benchmark 
+      test.acc <- mean(test.accuracies)
+      
+      if(test.acc > current.best.accuracy) {
+        #print("next best found")
+        #print(test.acc)
+        #print(current.best.accuracy)
+        current.best.accuracy <- test.acc
+        selected.i <- current.f #colnames(train)[i]
+      }
+    }
+  }
+  
+  return(selected.i)
+}
+
+backwardStepwise <- function(train, cls.train, sortedFeatures) {
+
+  test.acc <- c() 
+  
+  # carry out a LOOCV
+  set.seed(99)
+  fold <- createFolds(cls.train, k=nrow(train))
+  
+  # remove the least useful predictor one at a time
+  for (i in length(sortedFeatures):1) {
+	  current.f <- colnames(train)[i]
+	  features <- sortedFeatures[1:i]
+	  #print(features)
+	  
+    test.accuracies <- c()
+	  
+	  for(i in 1:length(fold)) {
+        truth <- cls.train[fold[[i]]]
+        trainingData <- train[-fold[[i]], features]
+        testingData <- train[fold[[i]],features]
+        #print(truth)
+        svm.model <- svm(x=trainingData, y=cls.train[-fold[[i]]], kernel="polynomial", type="C-classification")
+        pred <- predict(svm.model, testingData)
+        #print(pred)
+        accuracy <- sum(pred == truth) / length(truth)
+        test.accuracies <- c(test.accuracies, accuracy)
+	  }
+	  
+	  # take the avg test accuracy as benchmark 
+    test.acc <- c(test.acc, mean(test.accuracies))
+	  
+  }
+  
+  return(test.acc)
+}
+
+
+```
+
+## run the wrapper feature selection (SVM)
+
+```{r}
+
+# carry out t-test to sort features
+features <- tstatSort(dt.feature.selection.akt)
+
+# sorted features 
+features
+
+# best feature as per t-test
+features[1]
+
+```
+## forward stepwise 
+```{r}
+
+forwardFeatures <- c(features[1])
+# select the 2 to x best features using knn as a wrapper classifier
+for (j in 2:ncol(dt.feature.selection.akt)) { # ncol(dt.feature.selection.akt)
+  selected.i <- selectFeature(train = dt.feature.selection.akt[,-17],
+                              cls.train = dt.feature.selection.akt[,17],
+                              features = forwardFeatures)
+  print(selected.i)
+
+  # add the best feature from current run
+  forwardFeatures <- c(forwardFeatures, selected.i)
+}
+
+```
+## backward stepwise 
+
+```{r}
+
+test.accuracies <- backwardStepwise(train = dt.feature.selection.akt[,-17],
+                                    cls.train = dt.feature.selection.akt[,17],
+                                    sortedFeatures = features)
+
+```
+# plot the results for backwards selection 
+
+```{r}
+
+plot(rev(test.accuracies),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted")
+axis(1, at=seq(1, 16, by = 1), las=2)
 
 ```
 
