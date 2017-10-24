@@ -430,6 +430,31 @@ backwardStepwise <- function(train, cls.train, sortedFeatures) {
   return(test.acc)
 }
 
+# run the random sampling XX times to see if the result is different
+randomAccuracies <- function(positives, featureSpace, sortedFeatures, iterations) {
+  accuracies.all <- data.frame()
+  #names(accuracies.all) <- seq(length(sortedFeatures), 1)
+  for (i in 1:iterations) {
+    # pick 22 random for negatives
+    set.seed(i)
+    randomsamples <- sample(nrow(dt.unlabelled), size=nrow(positives), replace = FALSE)
+    #print(randomsamples)
+    negatives <- dt.unlabelled[randomsamples, featureSpace]
+    negatives$Kinases <- -1
+    # make a balanced set
+    balanced <- rbind(positives, negatives)
+    # run the wrapper selection process
+    accuracies <- backwardStepwise(train = balanced[,-17],
+                                        cls.train = balanced[,17],
+                                        sortedFeatures = sortedFeatures)
+    #accuracies <- data.frame(accuracies)
+    #names(accuracies) <- seq(length(sortedFeatures), 1)
+    accuracies.all <- rbind(accuracies.all, accuracies)
+  }
+  names(accuracies.all) <- seq(length(sortedFeatures), 1)
+  return(accuracies.all)
+}
+
 
 ```
 
@@ -488,26 +513,48 @@ for (j in 2:ncol(dt.feature.selection.mTOR)) { # ncol(dt.feature.selection.akt)
 ```
 
 ## backward stepwise 
+### akt feature selection with random sampling 
 
 ```{r}
 
-test.accuracies.akt <- backwardStepwise(train = dt.feature.selection.akt[,-17],
-                                    cls.train = dt.feature.selection.akt[,17],
-                                    sortedFeatures = featuresAkt)
+# reset the positives
+dt.feature.selection.akt <- dt.labeled.Akt[,predictorsAkt]
+dt.feature.selection.akt$Kinases <- 1
+dt.feature.selection.mTOR <- dt.labeled.mTOR[,predictorsmTOR]
+dt.feature.selection.mTOR$Kinases <- 1
 
-test.accuracies.mtor <- backwardStepwise(train = dt.feature.selection.mTOR[,-17],
-                                    cls.train = dt.feature.selection.mTOR[,17],
-                                    sortedFeatures = featuresmTOR)
+test.accuracies.akt <- randomAccuracies(positives = dt.feature.selection.akt, 
+                                        featureSpace = predictorsAkt,
+                                        sortedFeatures = featuresAkt,
+                                        iterations = 100)
 
 ```
 
+### mTOR feature selection with random sampling
+
+```{r}
+
+test.accuracies.mtor <- randomAccuracies(positives = dt.feature.selection.mTOR, 
+                                        featureSpace = predictorsmTOR,
+                                        sortedFeatures = featuresmTOR,
+                                        iterations = 100)
+```
+
 ## plot the results for backwards selection 
+
+```{r}
+
+# avg the results 
+test.accuracies.akt.avg <- colMeans(test.accuracies.akt)
+test.accuracies.mtor.avg <- colMeans(test.accuracies.mtor)
+
+```
 
 ### akt plots
 
 ```{r}
 
-plot(rev(test.accuracies.akt),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy akt")
+plot(rev(test.accuracies.akt.avg),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy akt")
 axis(1, at=seq(1, 16, by = 1), las=2)
 
 ```
@@ -516,19 +563,21 @@ axis(1, at=seq(1, 16, by = 1), las=2)
 
 ```{r}
 
-plot(rev(test.accuracies.mtor),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mtor")
+plot(rev(test.accuracies.mtor.avg),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mtor")
 axis(1, at=seq(1, 16, by = 1), las=2)
 
 ```
 ## feature selection results 
 ```{r}
 
+# how to best interpret the results?
+
 # akt features 
-print("For Akt - 2 most important features yield the best result")
-featuresAkt[1:2]
+print("For Akt - 4 most important features yield the best result before performance flatlines")
+featuresAkt[1:4]
 # mtor features 
-print("For mTOR -  5 most important features yield the best result")
-featuresAkt[1:5]
+print("For mTOR - 8 most important features yield the best result before performance flatlines")
+featuresmTOR[1:8]
 
 ```
 
