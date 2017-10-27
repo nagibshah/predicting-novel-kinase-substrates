@@ -9,26 +9,37 @@ output: html_document
 
 # install packages 
 ```{r, echo=FALSE, warning=FALSE}
-#install.packages("tibble") # this is for RSSL
-#install.packages("RSSL")
-#install.packages("upclass")
-#install.packages("mclust")
-#install.packages("caret")
-#install.packages("lme4")
-#install.packages("randomForest")
-#install.packages("RecordLinkage")
-#install.packages("knitr")
-#install.packages("XLConnect")
-#install.packages("class")
 
+install.packages("tibble") # this is for RSSL
+install.packages("RSSL")
+install.packages("upclass")
+install.packages("mclust")
+install.packages("caret")
+install.packages("lme4")
+install.packages("randomForest")
+install.packages("RecordLinkage")
+install.packages("knitr")
+install.packages("XLConnect")
+install.packages("class")
+install.packages("purrr")
+install.packages("mlbench")
+install.packages("adabag")
+install.packages("kknn")
+install.packages("fastAdaboost")
+install.packages("gbm")
+install.packages("lattice")
+install.packages("ggplot2")
+install.packages("Rcpp")
+install.packages("caret")
+install.packages("ddalpha")
+install.packages("tidyr")
 ## try http:// if https:// URLs are not supported
-#source("https://bioconductor.org/biocLite.R")
-#biocLite("Biostrings")
+source("https://bioconductor.org/biocLite.R")
+biocLite("Biostrings")
 
 #install if necessary
-#source("http://bioconductor.org/biocLite.R")
-#biocLite("seqLogo")
-#install.packages("gbm")
+source("http://bioconductor.org/biocLite.R")
+biocLite("seqLogo")
 
 ```
 
@@ -47,6 +58,7 @@ library(RSSL)
 library(e1071)
 library(caret)
 library(randomForest)
+library(plyr)
 library(dplyr)
 library(class)
 library(e1071)
@@ -58,6 +70,10 @@ library(stringr)
 library(rpart)
 library(data.table)
 library(tidyr)
+library(mlbench)
+library(kknn)
+library(fastAdaboost)
+library(gbm)
 
 ```
 
@@ -289,6 +305,168 @@ dt.Insulin$X0s <- NULL
 head(dt.Insulin)
 
 # average fold and average score are the same. already provided
+
+```
+
+# model analysis and select the best fit model
+
+## setup 
+
+```{r}
+
+# total 16 features approx
+predictorsAkt <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","aktMotifMatch","Kinases")
+
+predictorsmTOR <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","mTORMotifMatch","Kinases")
+
+dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
+dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
+dt.unlabelled <- dt.Insulin[which(is.na(dt.Insulin$Kinases)), ]
+
+dt.feature.selection.akt <- dt.labeled.Akt[,predictorsAkt]
+dt.feature.selection.akt$Kinases <- 1
+dt.feature.selection.mTOR <- dt.labeled.mTOR[,predictorsmTOR]
+dt.feature.selection.mTOR$Kinases <- 1
+
+dim(dt.feature.selection.akt)
+dim(dt.feature.selection.mTOR)
+
+# pick 22 random for akt negatives
+set.seed(55)
+aktNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.akt))
+temp <- dt.unlabelled[aktNeg, predictorsAkt]
+temp$Kinases <- -1
+dt.feature.selection.akt <- rbind(dt.feature.selection.akt, temp)
+temp <- NULL
+
+# pick 26 random mtor negatives
+set.seed(65)
+mtorNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.mTOR))
+temp <- dt.unlabelled[mtorNeg, predictorsmTOR]
+temp$Kinases <- -1
+dt.feature.selection.mTOR <- rbind(dt.feature.selection.mTOR, temp)
+temp <- NULL
+
+# final sets for feature selection exercise
+dt.feature.selection.akt$Kinases <- as.factor(dt.feature.selection.akt$Kinases)
+dt.feature.selection.mTOR$Kinases <- as.factor(dt.feature.selection.mTOR$Kinases)
+colnames(dt.feature.selection.akt)[17] <- "Class"
+colnames(dt.feature.selection.mTOR)[17] <- "Class"
+
+dim(dt.feature.selection.akt)
+dim(dt.feature.selection.mTOR)
+
+# helpers 
+
+sampleData <- function (positives, featureSpace) {
+      colnames(positives)[17] <- "Kinases" # change col name 
+      featureSpace <- colnames(positives)
+      set.seed(33)
+      randomsamples <- sample(nrow(dt.unlabelled), size=nrow(positives), replace = FALSE)
+      print(randomsamples)
+      #print(randomsamples)
+      negatives <- dt.unlabelled[randomsamples, featureSpace]
+      negatives$Kinases <- -1
+      # make a balanced set
+      balanced <- rbind(positives, negatives)
+      colnames(balanced)[17] <- "Class" # change col name
+      return(balanced)
+}
+
+AnalyseModels <- function (method, data) {
+  # prepare training scheme utilising LOOCV
+  control <- trainControl(method="repeatedcv", number=10, repeats=3)
+  controlLOOCV <- trainControl(method="LOOCV")
+  
+  model <- NULL
+  
+  #set.seed(5)
+  switch(method, 
+  kknn={
+    model <- train(Class~., data=data, method=method, trControl=controlLOOCV)
+  },
+  svmRadial={
+    tuneGrid <- expand.grid(sigma=seq(0.1,1,0.1),C=(1:10))
+    model <- train(Class~., data=data, method=method, trControl=controlLOOCV,tuneGrid=tuneGrid)
+  },
+  svmLinear={
+    tuneGrid <- expand.grid(C=(1:10))
+    model <- train(Class~., data=data, method=method, trControl=controlLOOCV, tuneGrid=tuneGrid)
+  },
+  svmPoly={
+    tuneGrid <- expand.grid(degree=(1:5),scale=seq(0.1,1,0.1),C=(1:10))
+    model <- train(Class~., data=data, method=method, trControl=controlLOOCV, tuneGrid=tuneGrid)
+  },
+  {
+    model <- train(Class~., data=data, method=method, trControl=controlLOOCV)
+  }
+  )
+  #model <- train(Class~., data=data, method=method, trControl=controlLOOCV)
+  print(model$bestTune)
+  # resample data for testing and keep the same positives
+  train <- sampleData(positives=data[which(data$Class == 1),])
+  
+  # predict on training set 
+  pred <- predict(model$finalModel, train[,-17])
+  if (method=="lda") {
+    rocModel <- roc(train[, 17], as.numeric(pred$class))  
+  }
+  else {
+    rocModel <- roc(train[, 17], as.numeric(pred))  
+  }
+  
+  return(rocModel)
+}
+
+```
+
+## run through some models to pick best one for AKT
+
+```{r}
+
+library(pROC)
+
+#model <- train(Class~., data=dt.feature.selection.akt, method="svmRadial", trControl=controlLOOCV)
+
+# knn model 
+rocKnn <- AnalyseModels("kknn",dt.feature.selection.akt)
+rocSvmR <- AnalyseModels("svmRadial",dt.feature.selection.akt)
+rocSvmL <- AnalyseModels("svmLinear",dt.feature.selection.akt)
+rocSvmP <- AnalyseModels("svmPoly",dt.feature.selection.akt)
+rocLda <- AnalyseModels("lda",dt.feature.selection.akt)
+#modelGbm <- AnalyseModels("gbm",dt.feature.selection.akt)
+
+
+plot(rocKnn, legacy.axes = TRUE, col="red", lty=3, main="Akt model performances")
+lines(rocSvmR, col="blue", lty=2)
+lines(rocSvmL, col="green3", lty=1)
+lines(rocSvmP, col="orange", lty=2)
+lines(rocLda, col="purple", lty=3)
+
+legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "SVM Poly", "LDA"), col = c("red", "blue", "green3", "orange","purple"), lty=c(3, 2, 1, 2, 3))
+
+```
+
+## run through some models to pick best one for mTOR 
+
+```{r}
+
+# knn model 
+rocKnn <- AnalyseModels("kknn",dt.feature.selection.mTOR)
+rocSvmR <- AnalyseModels("svmRadial",dt.feature.selection.mTOR)
+rocSvmL <- AnalyseModels("svmLinear",dt.feature.selection.mTOR)
+rocSvmP <- AnalyseModels("svmPoly",dt.feature.selection.mTOR)
+rocLda <- AnalyseModels("lda",dt.feature.selection.mTOR)
+#modelGbm <- AnalyseModels("gbm",dt.feature.selection.akt)
+
+
+plot(rocKnn, legacy.axes = TRUE, col="red", lty=3, main="mTOR model performances")
+lines(rocSvmR, col="blue", lty=2)
+lines(rocSvmL, col="green3", lty=1)
+lines(rocSvmP, col="orange", lty=2)
+lines(rocLda, col="purple", lty=3)
+
+legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "SVM Poly", "LDA"), col = c("red", "blue", "green3", "orange","purple"), lty=c(3, 2, 1, 2, 3))
 
 ```
 
