@@ -63,6 +63,7 @@ library(tidyr)
 
 # Read data
 ```{r}
+setwd("C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project")
 # load full data set
 dt.Insulin <- read.delim("datasets/InsulinPhospho.txt")
 #dim(dt.Insulin)
@@ -581,13 +582,34 @@ featuresmTOR[1:8]
 
 ```
 
+# Adaptive sampling
+```{r}
+
+AdaSampling.func <- function(dt.model.full, dt.labeled) {
+  
+  dt.model.full %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) -> dt.model.full
+  
+  for (i in 1:1000) {
+    
+    
+  }
+  
+}
+
+```
+
+
 # build SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data 
 ```{r, warning=FALSE}
 
 # function to build model 
-model.func <- function (dt.full, dt.labeled) {
+model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
 
-  dt.model.full <- dt.full
+  #dt.model.full <- dt.Akt.fulmodel
+  #dt.labeled <- dt.Akt
+  last.col = ncol(dt.model.full)-1
   
   dt.model.full %>%
     mutate(Class = -1) %>%
@@ -596,18 +618,29 @@ model.func <- function (dt.full, dt.labeled) {
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
   
-  for (i in 1:200) {
+  for (i in 1:1000) {
     
     dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
     
     dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.nolabel.sample)
     
     # build SVM classification model incl probability -- temporarily without seq.window
-    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], type="C-classification", decision.values = TRUE, probability=TRUE)
+    #print(head(dt.model[, 2:ncol(dt.model)]))
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel="polynomial", type="C-classification", cost=cost.n, degree=degree.n, decision.values = TRUE, probability=TRUE)
     
-    pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
+    #print(head(dt.model.full[, 2:last.col]))
+    pred <- predict(fit.model, dt.model.full[, 2:last.col], decision.values = TRUE, probability = TRUE)
   
     dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    
+    # build LDA classification model 
+    #fit.model <- lda(Class ~ ., data = dt.model[, 2:ncol(dt.model)], CV = TRUE)
+    #pred <- predict(fit.model, dt.model.full[, 2:last.col])$Class
+    #dt.result[, ncol(dt.result) + 1] <- pred$posterior
+    
+    #sapply(dt.model.full[, 2:last.col], class)
+    #sapply(dt.model[, 2:ncol(dt.model)], class)
+    #View(dt.model.full[, 2:last.col])
     names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
     
   }
@@ -623,40 +656,28 @@ model.func <- function (dt.full, dt.labeled) {
 
 # prediction output
 ```{r, warning=FALSE}
-
+library(MASS)
 # check data before build model
 dim(dt.Insulin)
 dim(dt.Akt)
 dim(dt.mTOR)
+head(dt.Insulin)
 
 # SVM to predict Akt - full model without motif
 # extract columns for Akt full model
-dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score")]
+dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "fitted.score")]
 dim(dt.Akt.fulmodel)
-Akt.final.fullmodel <- model.func(dt.Akt.fulmodel, dt.Akt)
+Akt.final.fullmodel <- model.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
 Akt.final.fullmodel[Akt.final.fullmodel$Class==1, ]
 Akt.final.fullmodel[Akt.final.fullmodel$Identifier %in% dt.mTOR$V1, ]
 
-# SVM to predict Akt - motif model 
-dt.Akt.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score", "aktMotifMatch")]
-dim(dt.Akt.motif)
-Akt.final.motif <- model.func(dt.Akt.motif, dt.Akt)
-Akt.final.motif[Akt.final.motif$Class==1, ]
-Akt.final.motif[Akt.final.motif$Identifier %in% dt.mTOR$V1, ]
-
 # SVM to predict mTOR - full model without motif
-dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score")]
+dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
 dim(dt.mTOR.fulmodel)
-mTOR.final.fullmodel <- model.func(dt.mTOR.fulmodel, dt.mTOR)
+mTOR.final.fullmodel <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1, 1)
 mTOR.final.fullmodel[mTOR.final.fullmodel$Class==1, ]
 mTOR.final.fullmodel[mTOR.final.fullmodel$Identifier %in% dt.Akt$V1, ]
 
-# SVM to predict mTOR - motif model 
-dt.mTOR.motif <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "average.score", "fitted.score", "mTORMotifMatch")]
-dim(dt.mTOR.motif)
-mTOR.final.motif <- model.func(dt.mTOR.motif, dt.mTOR)
-mTOR.final.motif[mTOR.final.motif$Class==1, ]
-mTOR.final.motif[mTOR.final.motif$Identifier %in% dt.Akt$V1, ]
 ```
 
 
@@ -715,9 +736,7 @@ names(df.mTOR)[colnames(df.mTOR)=="Full.model.predict"] <- "predictResult"
 
 
 diff.func ("predictResult", df.Akt, Akt.final.fullmodel, "Akt Full Model - ")
-diff.func ("predictResult", df.Akt, Akt.final.motif, "Akt Motif Model - ")
 diff.func ("predictResult", df.mTOR, mTOR.final.fullmodel, "mTOR Full Model - ")
-diff.func ("predictResult", df.mTOR, mTOR.final.motif, "mTOR Motif Model - ")
 
 ```
 
