@@ -495,14 +495,14 @@ dim(dt.feature.selection.akt)
 dim(dt.feature.selection.mTOR)
 
 # pick 22 random for akt negatives
-aktNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.akt), replace = TRUE)
+aktNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.akt))
 temp <- dt.unlabelled[aktNeg, predictorsAkt]
 temp$Kinases <- -1
 dt.feature.selection.akt <- rbind(dt.feature.selection.akt, temp)
 temp <- NULL
 
 # pick 26 random mtor negatives
-mtorNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.mTOR), replace = TRUE)
+mtorNeg <- sample(x=1:nrow(dt.unlabelled), size=nrow(dt.feature.selection.mTOR))
 temp <- dt.unlabelled[mtorNeg, predictorsmTOR]
 temp$Kinases <- -1
 dt.feature.selection.mTOR <- rbind(dt.feature.selection.mTOR, temp)
