@@ -62,14 +62,9 @@ library(randomForest)
 library(plyr)
 library(dplyr)
 library(class)
-library(e1071)
-library(gbm)
-library(ggplot2)
 library(scales)
 library(lubridate)
 library(stringr)
-library(rpart)
-library(data.table)
 library(tidyr)
 library(mlbench)
 library(kknn)
@@ -779,7 +774,7 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
   
-  for (i in 1:5000) {
+  for (i in 1:1000) {
     
     dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
     
@@ -863,7 +858,7 @@ model.adp.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   dt.pred.neg <- dt.model.full[dt.model.full$Class == -1, ]
   
   
-  for (i in 1:5000) {
+  for (i in 1:1000) {
     
     #dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
     #View(dt.model)
@@ -1100,18 +1095,58 @@ df.Akt %>%
   mutate(Identifier = paste0(str_trim(str_to_upper(df.Akt$GeneSymbol), side="both"), ";",str_trim(df.Akt$Phosphorylation.site, side="both"), ";" )) %>%
   mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.Akt
 names(df.Akt)[colnames(df.Akt)=="Full.model.predict"] <- "predictResult" 
+#head(df.Akt)
 
 df.mTOR %>%
   mutate(Identifier = paste0(str_trim(str_to_upper(df.mTOR$GeneSymbol), side="both"), ";",str_trim(df.mTOR$Phosphorylation.site, side="both"), ";" )) %>%
   mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.mTOR
 names(df.mTOR)[colnames(df.mTOR)=="Full.model.predict"] <- "predictResult" 
+#head(df.mTOR)
 
-
+df.mTOR[which(df.mTOR$Identifier %in% dt.Akt$V1), ]
 diff.func ("predictResult", df.Akt, Akt.final.fullmodel, "Akt Full Model - ")
 diff.func ("predictResult", df.mTOR, mTOR.final.fullmodel, "mTOR Full Model - ")
 
+# compare motif predict
+# head(dt.Insulin)
+dt.pred.AktMotif <- dt.Insulin[, c("Identifier", "aktMotifMatch")]
+names(dt.pred.AktMotif)[colnames(dt.pred.AktMotif) == "aktMotifMatch"] <- "Motif.predict"
+diff.func ("Motif.predict", df.Akt, dt.pred.AktMotif, "Akt Motif - ")
+
+dt.pred.mTORMotif <- dt.Insulin[, c("Identifier", "mTORMotifMatch")]
+names(dt.pred.mTORMotif)[colnames(dt.pred.mTORMotif) == "mTORMotifMatch"] <- "Motif.predict"
+diff.func ("Motif.predict", df.mTOR, dt.pred.mTORMotif, "mTOR Motif - ")
 ```
 
+
+# simulation 
+```{r}
+# summarize each feature
+feat.list <- dt.Insulin[, c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "mTORMotif", "fitted.score")]
+feat.summary <- sapply(feat.list, summary)
+feat.sd <- summarise_all(feat.list, funs(sd))
+row.names(feat.sd) <- "sd"
+
+feat.summary <- rbind(feat.summary, feat.sd)
+#View(feat.summary)
+
+
+# plot each feature
+par(mfrow=c(2, 2))
+
+for (i in 1:ncol(feat.list)) {
+  
+  x <- feat.list[, i]
+  h<-hist(x, breaks=30, col="red", xlab=colnames(feat.summary)[i], main=paste0("Histogram with Normal Curve - ", colnames(feat.summary)[i]))
+  xfit<-seq(min(x),max(x),length=40)
+  yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
+  yfit <- yfit*diff(h$mids[1:2])*length(x)
+  lines(xfit, yfit, col="blue", lwd=2)
+}
+
+print("We can see all features are normally distributed, we can generate simulation data set based on distribution and summary of each feature")
+
+```
 # Output session information
 ```{r}
 sessionInfo()
