@@ -860,7 +860,7 @@ letThereBeLight <- function (data,cost.n, degree.n) {
   lastProbabilities <- rep(0, nrow(dt.unlabelled))
   iterationCors <- c()
   
-  for (i in 1:100) {
+  for (i in 1:10) {
     # build a balanced set of data (randomly sampled from unlabelled set)
     balanced <- sampleData(positives=data[which(data$Class == 1),])
     balanced$Class <- as.character(balanced$Class)
@@ -886,7 +886,7 @@ letThereBeLight <- function (data,cost.n, degree.n) {
     pred <- predict(model$finalModel, unlabelled.all[, -last.col],type="prob")
     #return(pred)
     # store the probabilities against the identifiers
-    currentProbabilities <- pred[,1] # attr(pred, "probabilities")[,1]
+    currentProbabilities <- pred[,2] # attr(pred, "probabilities")[,1]
     dt.result[, ncol(dt.result) + 1] <- currentProbabilities
     names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
     
