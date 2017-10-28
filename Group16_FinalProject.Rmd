@@ -82,6 +82,7 @@ library(ggplot2)
 ```
 
 # Read data
+
 ```{r}
 #setwd("C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project")
 # load full data set
@@ -100,6 +101,27 @@ dt.Insulin$Kinases[dt.Insulin$Identifier %in% dt.mTOR$V1] <- "mTOR"
 unique(dt.Insulin$Kinases)
 # generate a subset of the labelled data 
 dt.labeled <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt' | dt.Insulin$Kinases == 'mTOR'), ]
+
+```
+
+# load 2016 data 
+
+```{r}
+
+# load prediction_2016 result
+
+df.Akt <- read.csv(file="datasets/Akt_predictions2016.csv", header=TRUE, sep=",")
+df.mTOR <- read.csv(file="datasets/mTOR_predictions2016.csv", header=TRUE, sep=",")
+
+df.Akt %>%
+  mutate(Identifier = paste0(str_trim(str_to_upper(df.Akt$GeneSymbol), side="both"), ";",str_trim(df.Akt$Phosphorylation.site, side="both"), ";" )) %>%
+  mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.Akt
+names(df.Akt)[colnames(df.Akt)=="Full.model.predict"] <- "predictResult" 
+
+df.mTOR %>%
+  mutate(Identifier = paste0(str_trim(str_to_upper(df.mTOR$GeneSymbol), side="both"), ";",str_trim(df.mTOR$Phosphorylation.site, side="both"), ";" )) %>%
+  mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.mTOR
+names(df.mTOR)[colnames(df.mTOR)=="Full.model.predict"] <- "predictResult" 
 
 ```
 
@@ -471,6 +493,20 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 
 ```
 
+## Model analysis results
+
+```{r}
+
+# SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset 
+
+print("Best Model tuning parameters - AKT")
+print("SVM Radial - Sigma: 1, C: 1.1")
+
+print("Best Model tuning parameters - mTOR")
+print("SVM Radial - Sigma: 1, C: 1.1")
+
+```
+
 # feature selection 
 ## setup
 ```{r, warning=FALSE}
@@ -529,49 +565,6 @@ tstatSort <- function (train) {
   # filter the top most discriminative feature based on p-values
   filtered.features <- names(sort(feature.pvalues)) #[1:10])
   filtered.features
-}
-
-selectFeature <- function(train, cls.train, features) {
-  ## identify a feature to be selected
-  current.best.accuracy <- -Inf
-  selected.i <- NULL
-  for(i in 1:ncol(train)) {
-    current.f <- colnames(train)[i]
-    #print(paste("Iteration:", i))
-    #print(paste("Current col:", current.f))
-    if(!current.f %in% features) {
-      # carry out a LOOCV
-      set.seed(99)
-      fold <- createFolds(cls.train, k=nrow(train))
-      
-      test.accuracies <- c()
-      
-      for(i in 1:length(fold)) {
-        truth <- cls.train[fold[[i]]]
-        trainingData <- train[-fold[[i]], c(features, current.f)]
-        testingData <- train[fold[[i]],c(features, current.f)]
-        #print(truth)
-        svm.model <- svm(x=trainingData, y=cls.train[-fold[[i]]], kernel="polynomial", type="C-classification")
-        pred <- predict(svm.model, testingData)
-        #print(pred)
-        accuracy <- sum(pred == truth) / length(truth)
-        test.accuracies <- c(test.accuracies, accuracy)
-      }
-      
-      # take the avg test accuracy as benchmark 
-      test.acc <- mean(test.accuracies)
-      
-      if(test.acc > current.best.accuracy) {
-        #print("next best found")
-        #print(test.acc)
-        #print(current.best.accuracy)
-        current.best.accuracy <- test.acc
-        selected.i <- current.f #colnames(train)[i]
-      }
-    }
-  }
-  
-  return(selected.i)
 }
 
 backwardStepwise <- function(train, cls.train, sortedFeatures) {
@@ -657,43 +650,9 @@ featuresmTOR
 featuresmTOR[1]
 
 ```
-## forward stepwise 
-### akt 
-```{r}
-
-forwardFeatures <- c(featuresAkt[1])
-# select the 2 to x best features using knn as a wrapper classifier
-for (j in 2:ncol(dt.feature.selection.akt)) { # ncol(dt.feature.selection.akt)
-  selected.i <- selectFeature(train = dt.feature.selection.akt[,-17],
-                              cls.train = dt.feature.selection.akt[,17],
-                              features = forwardFeatures)
-  print(selected.i)
-
-  # add the best feature from current run
-  forwardFeatures <- c(forwardFeatures, selected.i)
-}
-
-```
-### mtor 
-
-```{r}
-
-forwardFeatures <- c(featuresmTOR[1])
-# select the 2 to x best features using knn as a wrapper classifier
-for (j in 2:ncol(dt.feature.selection.mTOR)) { # ncol(dt.feature.selection.akt)
-  selected.i <- selectFeature(train = dt.feature.selection.mTOR[,-17],
-                              cls.train = dt.feature.selection.mTOR[,17],
-                              features = forwardFeatures)
-  print(selected.i)
-
-  # add the best feature from current run
-  forwardFeatures <- c(forwardFeatures, selected.i)
-}
-
-```
 
 ## backward stepwise 
-### akt feature selection with random sampling 
+### akt feature selection with random sampling, LOOCV 
 
 ```{r}
 
@@ -748,28 +707,27 @@ axis(1, at=seq(1, 16, by = 1), las=2)
 
 ```
 ## feature selection results 
-```{r}
 
-# how to best interpret the results?
+All the features in both Akt & Mtor classifications yields impressive results. 
+As such all features are important and cannot be dropped.
 
-# akt features 
-print("For Akt - 4 most important features yield the best result before performance flatlines")
-featuresAkt[1:4]
-# mtor features 
-print("For mTOR - 8 most important features yield the best result before performance flatlines")
-featuresmTOR[1:8]
+# Let there be light - Learn more about the unlabelled dataset
 
-```
+The purpose here is to identify highly probable negatives for mTORs and Akts respectively so that an ensemble can be built more effectively. 
 
+Successful identificaiton of the negative samples will assist in removing bias and also solve the class imbalance problem. 
 
-# build SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data 
+## helper functions/methods
+
 ```{r, warning=FALSE}
+
+library(MASS)
+
+# helpers for ensemble/bagging
 
 # function to build model 
 model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
 
-  #dt.model.full <- dt.Akt.fulmodel
-  #dt.labeled <- dt.Akt
   last.col = ncol(dt.model.full)-1
   
   dt.model.full %>%
@@ -785,11 +743,9 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
     
     dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.nolabel.sample)
     
-    # build SVM classification model incl probability -- temporarily without seq.window
-    #print(head(dt.model[, 2:ncol(dt.model)]))
+    # build SVM classification model incl probability
     fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel="radial", type="C-classification", cost=cost.n, degree=degree.n, decision.values = TRUE, probability=TRUE)
     
-    #print(head(dt.model.full[, 2:last.col]))
     pred <- predict(fit.model, dt.model.full[, 2:last.col], decision.values = TRUE, probability = TRUE)
   
     dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
@@ -804,53 +760,16 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   
 }
 
-```
-
-
-# prediction output
-```{r, warning=FALSE}
-library(MASS)
-# check data before build model
-dim(dt.Insulin)
-dim(dt.Akt)
-dim(dt.mTOR)
-head(dt.Insulin)
-
-# SVM to predict Akt - full model without motif
-# extract columns for Akt full model
-dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "fitted.score")]
-dim(dt.Akt.fulmodel)
-Akt.final.fullmodel <- model.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
-Akt.final.fullmodel[Akt.final.fullmodel$Class==1, ]
-Akt.final.fullmodel[Akt.final.fullmodel$Identifier %in% dt.mTOR$V1, ]
-
-# this is for adaptive sampling function 2 
-Akt.neg <- dt.Akt.fulmodel[which(dt.Akt.fulmodel$Identifier %in% Akt.final.fullmodel[Akt.final.fullmodel$predictResult < 0.5, ]$Identifier & !dt.Akt.fulmodel$Identifier %in% dt.Akt$V1), ]
-
-# SVM to predict mTOR - full model without motif
-dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
-dim(dt.mTOR.fulmodel)
-mTOR.final.fullmodel <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1, 1)
-mTOR.final.fullmodel[mTOR.final.fullmodel$Class==1, ]
-mTOR.final.fullmodel[mTOR.final.fullmodel$Identifier %in% dt.Akt$V1, ]
-
-# this is for adaptive sampling function 2 
-mTOR.neg <- dt.mTOR.fulmodel[which(dt.mTOR.fulmodel$Identifier %in% mTOR.final.fullmodel[mTOR.final.fullmodel$predictResult < 0.8, ]$Identifier & !dt.mTOR.fulmodel$Identifier %in% dt.mTOR$V1), ]
-
-```
-
-# Adaptive sampling
-```{r}
-
-# function to build model 
-model.adp.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
-
-  #dt.model.full <- dt.Akt.fulmodel
-  #dt.labeled <- dt.Akt
-  #cost.n <- 1
-  #degree.n <- 1
+# Semi adaptive function to learn negative data - with LOOCV + dynamic tuning parameters for each sample
+letThereBeLightv2 <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   
-  last.col = ncol(dt.model.full)-1
+  controlLOOCV <- trainControl(method="LOOCV",savePredictions = 'final',classProbs = T)
+  #tuneGrid <- expand.grid(sigma=seq(0.1,1,0.3),C=seq(0.1,5,0.5))
+  tuneGrid <- expand.grid(sigma=seq(0.1,1,0.5),C=seq(0.1,2,0.5))
+  
+  # instantiate the last probability values 
+  lastProbabilities <- rep(0, nrow(dt.model.full))
+  iterationCors <- c()
   
   dt.model.full %>%
     mutate(Class = -1) %>%
@@ -858,36 +777,48 @@ model.adp.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
+  last.col = ncol(dt.model.full)-1
   
   # data frame to store pred negative obs
   dt.pred.neg <- dt.model.full[dt.model.full$Class == -1, ]
   
-  
-  for (i in 1:5000) {
+  for (i in 1:100) {
     
-    #dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
-    #View(dt.model)
-    #dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.nolabel.sample)
-    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.pred.neg[sample(nrow(dt.pred.neg), nrow(dt.labeled)), ])
-    # build SVM classification model incl probability -- temporarily without seq.window
-    #print(head(dt.model[, 2:ncol(dt.model)]))
-    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel="radial", type="C-classification", cost=cost.n, degree=degree.n, decision.values = TRUE, probability=TRUE)
+    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], 
+                      dt.pred.neg[sample(nrow(dt.pred.neg), nrow(dt.labeled)),])
     
-    #print(head(dt.model.full[, 2:last.col]))
-    pred <- predict(fit.model, dt.model.full[, 2:last.col], decision.values = TRUE, probability = TRUE)
+    dt.model$Class <- as.character(dt.model$Class)
+    dt.model[which(dt.model$Class == "1"),]$Class <- "POSITIVE"
+    dt.model[which(dt.model$Class == "-1"),]$Class <- "NEGATIVE"
+    dt.model$Class <- as.factor(dt.model$Class)
+    
+    # train run validation and find the best c value for the dataset in question 
+    model <- train(Class~., data=dt.model[, 2:ncol(dt.model)], 
+                   method="svmRadial", 
+                   trControl=controlLOOCV,tuneGrid=tuneGrid)
+    
+    # now predict on the full unlabelled set 
+    pred <- predict(model$finalModel, dt.model.full[, 2:last.col],type="prob")
   
-    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    currentProbabilities <- pred[,2] # attr(pred, "probabilities")[,1]
+    dt.result[, ncol(dt.result) + 1] <- currentProbabilities
     names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
+    
+    # calculate the correlations and store 
+    currentCor <-  cor(currentProbabilities, lastProbabilities)
+    iterationCors <- c(iterationCors, currentCor)  
+    lastProbabilities <- currentProbabilities
     
     # add ranking based on probabilities 
     dt.result <- transform(dt.result, 
-                           prob.rank = ave(dt.result[, ncol(dt.result)], na.last = TRUE, 
+                           prob.rank = ave(dt.result[, ncol(dt.result)], 
+                                           na.last = TRUE, 
                                            FUN = function(x) rank(-x, ties.method = "last")))
     
     max.rank <- max(dt.result[dt.result$Class==1, ]$prob.rank)
-    #View(dt.result[order(dt.result$prob.rank), ])
     
-    dt.pred.neg <- dt.model.full[which(dt.model.full$Identifier %in% dt.result[dt.result$prob.rank > max.rank, ]$Identifier), ]
+    filtered <- which(dt.model.full$Identifier %in% dt.result[dt.result$prob.rank > max.rank, ]$Identifier)
+    dt.pred.neg <- dt.model.full[filtered, ]
     
     dt.result$prob.rank <- NULL
   }
@@ -895,95 +826,104 @@ model.adp.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
   names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
   
+  # plot the result of the iterations 
+  plot(iterationCors,type="l",#ylim=c(0, 2),
+       ylab="correlation", 
+       xlab="Number of iterations",
+       main="Optimisation point for random sampling")
+  
   return(dt.final)
   
 }
 
-Akt.final.adp <- model.adp.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
-Akt.final.adp[Akt.final.adp$Class==1, ]
-Akt.final.adp[Akt.final.adp$Identifier %in% dt.mTOR$V1, ]
-diff.func ("predictResult", df.Akt, Akt.final.adp, "Akt Adp Model - ")
-
-mTOR.final.adp <- model.adp.func(dt.mTOR.fulmodel, dt.mTOR, 1, 1)
-mTOR.final.adp[mTOR.final.adp$Class==1, ]
-mTOR.final.adp[mTOR.final.adp$Identifier %in% dt.Akt$V1, ]
-diff.func ("predictResult", df.mTOR, mTOR.final.adp, "mTOR Adp Model - ")
-
-```
-
-
-# build SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data
-
-```{r, warning=FALSE}
-
-# function to build model
-
-model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n) {
-
+# Semi adaptive function to learn negative data
+model.adp.func <- function (dt.model.full, dt.labeled, cost.n, degree.n, iterations) {
+  
+  # instantiate the last probability values 
+  lastProbabilities <- rep(0, nrow(dt.model.full))
+  iterationCors <- c()
+  
   dt.model.full %>%
     mutate(Class = -1) %>%
     mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) -> dt.model.full
-
-  dt.neg$Class = -1
+  last.col = ncol(dt.model.full)-1
   
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
-
-  for (i in 1:1000) {
-
-    # generate data for model, combining positive labeled, and the same size selected from most likely negative from adaptive sampling result
-    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.neg[sample(nrow(dt.neg), nrow(dt.labeled)),])
-
+  
+  # data frame to store pred negative obs
+  dt.pred.neg <- dt.model.full[dt.model.full$Class == -1, ]
+  
+  for (i in 1:iterations) {
+    
+    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], 
+                      dt.pred.neg[sample(nrow(dt.pred.neg), 
+                                         nrow(dt.labeled)), ])
     # build SVM classification model incl probability
-    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel ="radial", type="C-classification", decision.values = TRUE, probability=TRUE, cost = cost.n, degree = degree.n)
-
-    pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
-
-    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], 
+                     kernel="radial", type="C-classification", 
+                     cost=cost.n, degree=degree.n, 
+                     decision.values = TRUE, probability=TRUE)
+    
+    pred <- predict(fit.model, dt.model.full[, 2:last.col], decision.values = TRUE, probability = TRUE)
+  
+    currentProbabilities <- attr(pred, "probabilities")[,1] # attr(pred, "probabilities")[,1]
+    dt.result[, ncol(dt.result) + 1] <- currentProbabilities
     names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
-
+    
+    # calculate the correlations and store 
+    currentCor <-  cor(currentProbabilities, lastProbabilities)
+    iterationCors <- c(iterationCors, currentCor)  
+    lastProbabilities <- currentProbabilities
+    
+    # add ranking based on probabilities 
+    dt.result <- transform(dt.result, 
+                           prob.rank = ave(dt.result[, ncol(dt.result)], na.last = TRUE, 
+                                           FUN = function(x) rank(-x, ties.method = "last")))
+    
+    max.rank <- max(dt.result[dt.result$Class==1, ]$prob.rank)
+    
+    dt.pred.neg <- dt.model.full[which(dt.model.full$Identifier 
+                                       %in% 
+                                         dt.result[dt.result$prob.rank > max.rank, ]$Identifier), ]
+    
+    dt.result$prob.rank <- NULL
   }
+    
   dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
   names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
-
+  
+  # plot the result of the iterations 
+  plot(iterationCors,type="l",#ylim=c(0, 2),
+       ylab="correlation", 
+       xlab="Number of iterations",
+       main="Optimisation point for random sampling")
+  
   return(dt.final)
-
+  
 }
-Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1, 1)
-Akt.adp2[Akt.adp2$Class==1, ]
-Akt.adp2[Akt.adp2$Identifier %in% dt.mTOR$V1, ]
-diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adp 2 Model - ")
 
-mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1, 1)
-mTOR.adp2[mTOR.adp2$Class==1, ]
-mTOR.adp2[mTOR.adp2$Identifier %in% dt.Akt$V1, ]
-diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adp 2 Model - ")
-
-```
-
-## nagibs code to handle plotting of coefficients 
-
-```{r}
-
-#library(raster)
-
-# function to build model 
+# basic function to random sample including LOOCV and dynamic tuning per sample
 letThereBeLight <- function (data,cost.n, degree.n) {
 
   # prep the full unlabelled set
   featureSpace <- colnames(data)
-  unlabelled.all <- dt.unlabelled[,featureSpace]
+  unlabelled.all <- dt.Insulin[,featureSpace]
   # data frame to store pred result
-  dt.result <- dt.unlabelled[, c("Identifier","Kinases")]
+  dt.result <- dt.Insulin[, c("Identifier","Kinases")]
   colnames(unlabelled.all)[17] <- "Class"
   colnames(dt.result)[2] <- "Class"
+  
+  # covert the classes to int
+  dt.result[which(dt.result$Class == 'Akt')]$Class <- "1"
+  dt.result[which(dt.result$Class == 'mTOR')]$Class <- "-1"
+  
   colnames(data)[17] <- "Class"
   
   controlLOOCV <- trainControl(method="LOOCV",savePredictions = 'final',classProbs = T)
   #tuneGrid <- expand.grid(sigma=seq(0.1,1,0.3),C=seq(0.1,5,0.5))
   tuneGrid <- expand.grid(sigma=seq(0.1,1,0.5),C=seq(0.1,2,0.5))
   
-
   # instantiate the last probability values 
   lastProbabilities <- rep(0, nrow(dt.unlabelled))
   iterationCors <- c()
@@ -1038,30 +978,38 @@ letThereBeLight <- function (data,cost.n, degree.n) {
   
 }
 
-```
+# ensemble function (make final predictions)
+model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n) {
 
-##  find the negative nancies 
+  dt.model.full %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) -> dt.model.full
 
-### akt nancies 
+  dt.neg$Class = -1
+  
+  # data frame to store pred result
+  dt.result <- dt.model.full[, c("Identifier", "Class")]
 
-```{r}
+  for (i in 1:1000) {
 
-aktNancies <- letThereBeLight(dt.feature.selection.akt, 1, 1)
+    # generate data for model, combining positive labeled, and the same size selected from most likely negative from adaptive sampling result
+    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.neg[sample(nrow(dt.neg), nrow(dt.labeled)),])
 
-```
+    # build SVM classification model incl probability
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel ="radial", type="C-classification", decision.values = TRUE, probability=TRUE, cost = cost.n, degree = degree.n)
 
-### mTOR nancies 
+    pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
 
-```{r}
+    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
 
-mTORNancies <- letThereBeLight(dt.feature.selection.mTOR, 1, 1)
+  }
+  dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
+  names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
 
-```
+  return(dt.final)
 
-# compares prediction diff
-# 1. use bootstraping to calculate confidence interval of average difference 
-# 2. generates a plot to show distribution of difference 
-```{r}
+}
 
 diff.func <- function (type, dt.original, dt.prediction, title) {
 
@@ -1088,27 +1036,84 @@ ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50) +ggtitle(paste0(titl
 
 }
 
-# load prediction_2016 result
-options(java.parameters = "-Xmx4g" )
-library(XLConnect)
+```
 
-wb = loadWorkbook("datasets/Prediction_2016.xlsx")
-df.Akt = readWorksheet(wb, sheet = "Akt_prediction", header = TRUE)
-df.mTOR = readWorksheet(wb, sheet = "mTOR_prediction", header = TRUE)
+## Create Highly probabble Negative subsets
 
-df.Akt %>%
-  mutate(Identifier = paste0(str_trim(str_to_upper(df.Akt$GeneSymbol), side="both"), ";",str_trim(df.Akt$Phosphorylation.site, side="both"), ";" )) %>%
-  mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.Akt
-names(df.Akt)[colnames(df.Akt)=="Full.model.predict"] <- "predictResult" 
+### akt
 
-df.mTOR %>%
-  mutate(Identifier = paste0(str_trim(str_to_upper(df.mTOR$GeneSymbol), side="both"), ";",str_trim(df.mTOR$Phosphorylation.site, side="both"), ";" )) %>%
-  mutate(Full.model.predict = as.numeric(Full.model.predict))  -> df.mTOR
-names(df.mTOR)[colnames(df.mTOR)=="Full.model.predict"] <- "predictResult" 
+```{r}
+
+dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "fitted.score")]
+aktNancies <- model.adp.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000) # as per best tuning param val 
+
+```
+
+### mtor 
+
+```{r}
+
+dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
+mTORNancies <- model.adp.func(dt.mTOR.fulmodel, dt.mTOR, 1.1, 1, 1000)
+
+```
+
+### dataset for ensemble
+
+```{r}
+
+# akts 
+aktNancies[aktNancies$Class==1, ]
+aktNancies[aktNancies$Identifier %in% dt.mTOR$V1, ]
+
+# negatives subset for ensemble step 
+Akt.neg <- dt.Akt.fulmodel[which(dt.Akt.fulmodel$Identifier %in% 
+                                   aktNancies[aktNancies$predictResult < 0.5, ]$Identifier 
+                                 & !dt.Akt.fulmodel$Identifier %in% dt.Akt$V1), ]
+
+# mtors 
+mTORNancies[mTORNancies$Class==1, ]
+mTORNancies[mTORNancies$Identifier %in% dt.Akt$V1, ]
+
+# negative subset for ensemble step
+mTOR.neg <- dt.mTOR.fulmodel[which(dt.mTOR.fulmodel$Identifier %in%
+                                     mTORNancies[mTORNancies$predictResult 
+                                                          < 0.8, ]$Identifier & 
+                                     !dt.mTOR.fulmodel$Identifier %in% dt.mTOR$V1), ]
+
+```
 
 
-diff.func ("predictResult", df.Akt, Akt.final.fullmodel, "Akt Full Model - ")
-diff.func ("predictResult", df.mTOR, mTOR.final.fullmodel, "mTOR Full Model - ")
+# Final Predictions
+```{r, warning=FALSE}
+
+Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1)
+Akt.adp2[Akt.adp2$Class==1, ]
+Akt.adp2[Akt.adp2$Identifier %in% dt.mTOR$V1, ]
+
+
+mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1)
+mTOR.adp2[mTOR.adp2$Class==1, ]
+mTOR.adp2[mTOR.adp2$Identifier %in% dt.Akt$V1, ]
+
+
+```
+# compares prediction diff
+## 1. use bootstraping to calculate confidence interval of average difference 
+## 2. generates a plot to show distribution of difference 
+
+## comparison with 2016 
+```{r}
+
+diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adp 2 Model - ")
+diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adp 2 Model - ")
+
+```
+
+```{r}
+
+#diff.func ("predictResult", df.Akt, Akt.final.fullmodel, "Akt Full Model - ")
+#diff.func ("predictResult", df.mTOR, mTOR.final.fullmodel, "mTOR Full Model - ")
 
 ```
 
