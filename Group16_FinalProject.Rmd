@@ -79,7 +79,7 @@ library(gbm)
 
 # Read data
 ```{r}
-setwd("C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project")
+#setwd("C:/Users/Ling/Documents/My Study/STAT5003/Project2/Final project")
 # load full data set
 dt.Insulin <- read.delim("datasets/InsulinPhospho.txt")
 #dim(dt.Insulin)
@@ -361,9 +361,9 @@ dim(dt.feature.selection.mTOR)
 sampleData <- function (positives, featureSpace) {
       colnames(positives)[17] <- "Kinases" # change col name 
       featureSpace <- colnames(positives)
-      set.seed(33)
+      #set.seed(33)
       randomsamples <- sample(nrow(dt.unlabelled), size=nrow(positives), replace = FALSE)
-      print(randomsamples)
+      #print(randomsamples)
       #print(randomsamples)
       negatives <- dt.unlabelled[randomsamples, featureSpace]
       negatives$Kinases <- -1
@@ -832,6 +832,88 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
 
 ```
 
+## nagibs code to handle plotting of coefficients 
+
+```{r}
+
+library(raster)
+
+# function to build model 
+letThereBeLight <- function (data,cost.n, degree.n) {
+
+  # prep the full unlabelled set
+  featureSpace <- colnames(data)
+  unlabelled.all <- dt.unlabelled[,featureSpace]
+  # data frame to store pred result
+  dt.result <- dt.unlabelled[, c("Identifier","Kinases")]
+  colnames(unlabelled.all)[17] <- "Class"
+  colnames(dt.result)[2] <- "Class"
+  colnames(data)[17] <- "Class"
+
+  # instantiate the last probability values 
+  lastProbabilities <- rep(0, nrow(dt.unlabelled))
+  iterationCors <- c()
+  
+  for (i in 1:500) {
+    # build a balanced set of data (randomly sampled from unlabelled set)
+    balanced <- sampleData(positives=data[which(data$Class == 1),])
+    last.col = ncol(balanced)
+    
+    # build SVM classification model incl probability
+    fit.model <- svm(Class ~ ., data=balanced, 
+                     kernel="polynomial", type="C-classification", 
+                     cost=cost.n, degree=degree.n, 
+                     decision.values = TRUE, probability=TRUE)
+    
+    # now predict on the full unlabelled set 
+    pred <- predict(fit.model, unlabelled.all[, -last.col], 
+                    decision.values = TRUE, probability = TRUE)
+  
+    # store the probabilities against the identifiers
+    currentProbabilities <- attr(pred, "probabilities")[,1]
+    dt.result[, ncol(dt.result) + 1] <- currentProbabilities
+    names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
+    
+    # calculate the correlations and store 
+    currentCor <- cv(currentProbabilities) #cov(currentProbabilities, lastProbabilities)
+    iterationCors <- c(iterationCors, currentCor)  
+    lastProbabilities <- currentProbabilities
+    
+  }
+    
+  # calculate the mean and store the result
+  dt.final <- data.frame(dt.result[,1],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
+  names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
+  plot(iterationCors,type="l",#ylim=c(0, 2),
+       ylab="covariance", 
+       xlab="Number of iterations",
+       main="Optimisation point for random sampling")
+  #axis(1, at=seq(1, 100, by = 1), las=2)
+  
+  return(dt.final)
+  
+}
+
+```
+
+##  find the negative nancies 
+
+### akt nancies 
+
+```{r}
+
+aktNancies <- letThereBeLight(dt.feature.selection.akt, 1, 1)
+
+```
+
+### mTOR nancies 
+
+```{r}
+
+mTORNancies <- letThereBeLight(dt.feature.selection.mTOR, 1, 1)
+
+```
+
 # prediction output
 ```{r, warning=FALSE}
 library(MASS)
@@ -843,8 +925,6 @@ head(dt.Insulin)
 
 # SVM to predict Akt - full model without motif
 # extract columns for Akt full model
-dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "fitted.score")]
-dim(dt.Akt.fulmodel)
 Akt.final.fullmodel <- model.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
 Akt.final.fullmodel[Akt.final.fullmodel$Class==1, ]
 Akt.final.fullmodel[Akt.final.fullmodel$Identifier %in% dt.mTOR$V1, ]
