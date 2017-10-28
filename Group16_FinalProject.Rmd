@@ -761,24 +761,6 @@ featuresmTOR[1:8]
 
 ```
 
-# Adaptive sampling
-```{r}
-
-AdaSampling.func <- function(dt.model.full, dt.labeled) {
-  
-  dt.model.full %>%
-    mutate(Class = -1) %>%
-    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) -> dt.model.full
-  
-  for (i in 1:1000) {
-    
-    
-  }
-  
-}
-
-```
-
 
 # build SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data 
 ```{r, warning=FALSE}
@@ -797,7 +779,7 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
   
-  for (i in 1:1000) {
+  for (i in 1:5000) {
     
     dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
     
@@ -805,21 +787,12 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
     
     # build SVM classification model incl probability -- temporarily without seq.window
     #print(head(dt.model[, 2:ncol(dt.model)]))
-    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel="polynomial", type="C-classification", cost=cost.n, degree=degree.n, decision.values = TRUE, probability=TRUE)
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel="radial", type="C-classification", cost=cost.n, degree=degree.n, decision.values = TRUE, probability=TRUE)
     
     #print(head(dt.model.full[, 2:last.col]))
     pred <- predict(fit.model, dt.model.full[, 2:last.col], decision.values = TRUE, probability = TRUE)
   
     dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
-    
-    # build LDA classification model 
-    #fit.model <- lda(Class ~ ., data = dt.model[, 2:ncol(dt.model)], CV = TRUE)
-    #pred <- predict(fit.model, dt.model.full[, 2:last.col])$Class
-    #dt.result[, ncol(dt.result) + 1] <- pred$posterior
-    
-    #sapply(dt.model.full[, 2:last.col], class)
-    #sapply(dt.model[, 2:ncol(dt.model)], class)
-    #View(dt.model.full[, 2:last.col])
     names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
     
   }
@@ -830,6 +803,161 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
   return(dt.final)
   
 }
+
+```
+
+
+# prediction output
+```{r, warning=FALSE}
+library(MASS)
+# check data before build model
+dim(dt.Insulin)
+dim(dt.Akt)
+dim(dt.mTOR)
+head(dt.Insulin)
+
+# SVM to predict Akt - full model without motif
+# extract columns for Akt full model
+dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "fitted.score")]
+dim(dt.Akt.fulmodel)
+Akt.final.fullmodel <- model.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
+Akt.final.fullmodel[Akt.final.fullmodel$Class==1, ]
+Akt.final.fullmodel[Akt.final.fullmodel$Identifier %in% dt.mTOR$V1, ]
+
+# this is for adaptive sampling function 2 
+Akt.neg <- dt.Akt.fulmodel[which(dt.Akt.fulmodel$Identifier %in% Akt.final.fullmodel[Akt.final.fullmodel$predictResult < 0.5, ]$Identifier & !dt.Akt.fulmodel$Identifier %in% dt.Akt$V1), ]
+
+# SVM to predict mTOR - full model without motif
+dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
+dim(dt.mTOR.fulmodel)
+mTOR.final.fullmodel <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1, 1)
+mTOR.final.fullmodel[mTOR.final.fullmodel$Class==1, ]
+mTOR.final.fullmodel[mTOR.final.fullmodel$Identifier %in% dt.Akt$V1, ]
+
+# this is for adaptive sampling function 2 
+mTOR.neg <- dt.mTOR.fulmodel[which(dt.mTOR.fulmodel$Identifier %in% mTOR.final.fullmodel[mTOR.final.fullmodel$predictResult < 0.8, ]$Identifier & !dt.mTOR.fulmodel$Identifier %in% dt.mTOR$V1), ]
+
+```
+
+# Adaptive sampling
+```{r}
+
+# function to build model 
+model.adp.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
+
+  #dt.model.full <- dt.Akt.fulmodel
+  #dt.labeled <- dt.Akt
+  #cost.n <- 1
+  #degree.n <- 1
+  
+  last.col = ncol(dt.model.full)-1
+  
+  dt.model.full %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) -> dt.model.full
+  
+  # data frame to store pred result
+  dt.result <- dt.model.full[, c("Identifier", "Class")]
+  
+  # data frame to store pred negative obs
+  dt.pred.neg <- dt.model.full[dt.model.full$Class == -1, ]
+  
+  
+  for (i in 1:5000) {
+    
+    #dt.nolabel.sample <- dt.model.full[dt.model.full$Class==-1,][sample(nrow(dt.model.full[dt.model.full$Class==-1, ]), nrow(dt.labeled)),]
+    #View(dt.model)
+    #dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.nolabel.sample)
+    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.pred.neg[sample(nrow(dt.pred.neg), nrow(dt.labeled)), ])
+    # build SVM classification model incl probability -- temporarily without seq.window
+    #print(head(dt.model[, 2:ncol(dt.model)]))
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel="radial", type="C-classification", cost=cost.n, degree=degree.n, decision.values = TRUE, probability=TRUE)
+    
+    #print(head(dt.model.full[, 2:last.col]))
+    pred <- predict(fit.model, dt.model.full[, 2:last.col], decision.values = TRUE, probability = TRUE)
+  
+    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
+    
+    # add ranking based on probabilities 
+    dt.result <- transform(dt.result, 
+                           prob.rank = ave(dt.result[, ncol(dt.result)], na.last = TRUE, 
+                                           FUN = function(x) rank(-x, ties.method = "last")))
+    
+    max.rank <- max(dt.result[dt.result$Class==1, ]$prob.rank)
+    #View(dt.result[order(dt.result$prob.rank), ])
+    
+    dt.pred.neg <- dt.model.full[which(dt.model.full$Identifier %in% dt.result[dt.result$prob.rank > max.rank, ]$Identifier), ]
+    
+    dt.result$prob.rank <- NULL
+  }
+    
+  dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
+  names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
+  
+  return(dt.final)
+  
+}
+
+Akt.final.adp <- model.adp.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
+Akt.final.adp[Akt.final.adp$Class==1, ]
+Akt.final.adp[Akt.final.adp$Identifier %in% dt.mTOR$V1, ]
+diff.func ("predictResult", df.Akt, Akt.final.adp, "Akt Adp Model - ")
+
+mTOR.final.adp <- model.adp.func(dt.mTOR.fulmodel, dt.mTOR, 1, 1)
+mTOR.final.adp[mTOR.final.adp$Class==1, ]
+mTOR.final.adp[mTOR.final.adp$Identifier %in% dt.Akt$V1, ]
+diff.func ("predictResult", df.mTOR, mTOR.final.adp, "mTOR Adp Model - ")
+
+```
+
+
+# build SVM model based on labeled positive class and the same size randomly selected non-labeled (assume all negative) data
+
+```{r, warning=FALSE}
+
+# function to build model
+
+model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n) {
+
+  dt.model.full %>%
+    mutate(Class = -1) %>%
+    mutate(Class = replace(Class, Identifier %in% dt.labeled$V1, 1)) -> dt.model.full
+
+  dt.neg$Class = -1
+  
+  # data frame to store pred result
+  dt.result <- dt.model.full[, c("Identifier", "Class")]
+
+  for (i in 1:1000) {
+
+    # generate data for model, combining positive labeled, and the same size selected from most likely negative from adaptive sampling result
+    dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.neg[sample(nrow(dt.neg), nrow(dt.labeled)),])
+
+    # build SVM classification model incl probability
+    fit.model <- svm(Class ~ ., data=dt.model[, 2:ncol(dt.model)], kernel ="radial", type="C-classification", decision.values = TRUE, probability=TRUE, cost = cost.n, degree = degree.n)
+
+    pred <- predict(fit.model, dt.model.full[, 2:ncol(dt.model.full)-1], decision.values = TRUE, probability = TRUE)
+
+    dt.result[, ncol(dt.result) + 1] <- attr(pred, "probabilities")[,1]
+    names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
+
+  }
+  dt.final <- data.frame(dt.result[,1:2],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
+  names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
+
+  return(dt.final)
+
+}
+Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1, 1)
+Akt.adp2[Akt.adp2$Class==1, ]
+Akt.adp2[Akt.adp2$Identifier %in% dt.mTOR$V1, ]
+diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adp 2 Model - ")
+
+mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1, 1)
+mTOR.adp2[mTOR.adp2$Class==1, ]
+mTOR.adp2[mTOR.adp2$Identifier %in% dt.Akt$V1, ]
+diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adp 2 Model - ")
 
 ```
 
@@ -927,36 +1055,6 @@ aktNancies <- letThereBeLight(dt.feature.selection.akt, 1, 1)
 ```{r}
 
 mTORNancies <- letThereBeLight(dt.feature.selection.mTOR, 1, 1)
-
-```
-
-# prediction output
-```{r, warning=FALSE}
-library(MASS)
-# check data before build model
-dim(dt.Insulin)
-dim(dt.Akt)
-dim(dt.mTOR)
-head(dt.Insulin)
-
-# SVM to predict Akt - full model without motif
-# extract columns for Akt full model
-Akt.final.fullmodel <- model.func(dt.Akt.fulmodel, dt.Akt, 1, 1)
-Akt.final.fullmodel[Akt.final.fullmodel$Class==1, ]
-Akt.final.fullmodel[Akt.final.fullmodel$Identifier %in% dt.mTOR$V1, ]
-
-# SVM to predict mTOR - full model without motif
-dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
-dim(dt.mTOR.fulmodel)
-mTOR.final.fullmodel <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1, 1)
-mTOR.final.fullmodel[mTOR.final.fullmodel$Class==1, ]
-mTOR.final.fullmodel[mTOR.final.fullmodel$Identifier %in% dt.Akt$V1, ]
-
-```
-
-
-# Validation
-```{r}
 
 ```
 
