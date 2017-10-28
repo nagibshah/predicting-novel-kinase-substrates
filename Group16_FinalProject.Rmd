@@ -1054,7 +1054,7 @@ aktNancies <- model.adp.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000) # as per bes
 ```{r}
 
 dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
-mTORNancies <- model.adp.func(dt.mTOR.fulmodel, dt.mTOR, 1.1, 1, 000)
+mTORNancies <- model.adp.func(dt.mTOR.fulmodel, dt.mTOR, 1.1, 1, 1000)
 
 ```
 
