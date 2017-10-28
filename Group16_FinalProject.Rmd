@@ -33,6 +33,7 @@ install.packages("Rcpp")
 install.packages("caret")
 install.packages("ddalpha")
 install.packages("tidyr")
+install.packages("pROC")
 ## try http:// if https:// URLs are not supported
 source("https://bioconductor.org/biocLite.R")
 biocLite("Biostrings")
@@ -51,7 +52,7 @@ opts_knit$set(root.dir = "C:/Users/Ling/Documents/My Study/STAT5003/Project2/Fin
 ```
 
 # call libraries 
-```{r, warning=FALSE}
+```{r, warning=FALSE, echo=FALSE}
 library(mclust)
 library(upclass)
 library(RSSL)
@@ -74,6 +75,9 @@ library(mlbench)
 library(kknn)
 library(fastAdaboost)
 library(gbm)
+library(Biostrings)
+library(lattice)
+library(ggplot2)
 
 ```
 
@@ -121,8 +125,6 @@ str(dt.labeled)
 
 #install.packages("lattice")
 #install.packages("ggplot2")
-library(lattice)
-library(ggplot2)
 
 filteredFeatures <- c("Avg.Fold","AUC","Ins.1","Ins.2","LY","MK","Kinases")
 temporalFeatures <- c("X15s","X30s","X1m","X2m","X5m","X10m","X20m","X60m","Kinases")
@@ -140,7 +142,7 @@ pairs(Kinases~., dt.labeled[,filteredFeatures], col=dt.labeled[,filteredFeatures
 
 # seq.window pattern transformation
 
-```{r, warning=FALSE}
+```{r, warning=FALSE, echo=FALSE}
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
@@ -160,7 +162,6 @@ mTORSequences <-  t(data.frame(strsplit(phosphoSites.mTOR.allSequences, "")))
 colnames(mTORSequences) <- paste("", 1:13, sep = "")
 
 # generate the consensus Matrix 
-library(Biostrings)
 
 aktSequences.pfm <- consensusMatrix(phosphoSites.Akt.allSequences) #, as.prob = T)
 colnames(aktSequences.pfm) <- colnames(aktSequences)
@@ -172,7 +173,7 @@ colnames(mTORSequences.pfm) <- colnames(mTORSequences)
 
 ## visualise the patterns 
 
-```{r}
+```{r, warning=FALSE}
 
 # visualise the patterns
 library(RColorBrewer)
@@ -386,15 +387,15 @@ AnalyseModels <- function (method, data) {
     model <- train(Class~., data=data, method=method, trControl=controlLOOCV)
   },
   svmRadial={
-    tuneGrid <- expand.grid(sigma=seq(0.1,1,0.1),C=(1:10))
+    tuneGrid <- expand.grid(sigma=seq(0.1,1,0.1),C=seq(0.1,5,0.5))
     model <- train(Class~., data=data, method=method, trControl=controlLOOCV,tuneGrid=tuneGrid)
   },
   svmLinear={
-    tuneGrid <- expand.grid(C=(1:10))
+    tuneGrid <- expand.grid(C=seq(0.1,5,0.5))
     model <- train(Class~., data=data, method=method, trControl=controlLOOCV, tuneGrid=tuneGrid)
   },
   svmPoly={
-    tuneGrid <- expand.grid(degree=(1:5),scale=seq(0.1,1,0.1),C=(1:10))
+    tuneGrid <- expand.grid(degree=(1:5),scale=seq(0.1,1,0.1),C=seq(0.1,5,0.5))
     model <- train(Class~., data=data, method=method, trControl=controlLOOCV, tuneGrid=tuneGrid)
   },
   {
@@ -422,7 +423,7 @@ AnalyseModels <- function (method, data) {
 
 ## run through some models to pick best one for AKT
 
-```{r}
+```{r, warning=FALSE}
 
 library(pROC)
 
@@ -449,7 +450,7 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 
 ## run through some models to pick best one for mTOR 
 
-```{r}
+```{r, warning=FALSE}
 
 # knn model 
 rocKnn <- AnalyseModels("kknn",dt.feature.selection.mTOR)
@@ -836,7 +837,7 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n) {
 
 ```{r}
 
-library(raster)
+#library(raster)
 
 # function to build model 
 letThereBeLight <- function (data,cost.n, degree.n) {
@@ -849,33 +850,48 @@ letThereBeLight <- function (data,cost.n, degree.n) {
   colnames(unlabelled.all)[17] <- "Class"
   colnames(dt.result)[2] <- "Class"
   colnames(data)[17] <- "Class"
+  
+  controlLOOCV <- trainControl(method="LOOCV",savePredictions = 'final',classProbs = T)
+  #tuneGrid <- expand.grid(sigma=seq(0.1,1,0.3),C=seq(0.1,5,0.5))
+  tuneGrid <- expand.grid(sigma=seq(0.1,1,0.5),C=seq(0.1,2,0.5))
+  
 
   # instantiate the last probability values 
   lastProbabilities <- rep(0, nrow(dt.unlabelled))
   iterationCors <- c()
   
-  for (i in 1:500) {
+  for (i in 1:100) {
     # build a balanced set of data (randomly sampled from unlabelled set)
     balanced <- sampleData(positives=data[which(data$Class == 1),])
+    balanced$Class <- as.character(balanced$Class)
+    balanced[which(balanced$Class == "1"),]$Class <- "POSITIVE"
+    balanced[which(balanced$Class == "-1"),]$Class <- "NEGATIVE"
+    balanced$Class <- as.factor(balanced$Class)
+    
+    
     last.col = ncol(balanced)
     
     # build SVM classification model incl probability
-    fit.model <- svm(Class ~ ., data=balanced, 
-                     kernel="polynomial", type="C-classification", 
-                     cost=cost.n, degree=degree.n, 
-                     decision.values = TRUE, probability=TRUE)
+    #fit.model <- svm(Class ~ ., data=balanced, 
+    #                 kernel="polynomial", type="C-classification", 
+    #                 cost=cost.n, degree=degree.n, 
+    #                 decision.values = TRUE, probability=TRUE)
+    
+    # train run validation and find the best c value for the dataset in question 
+    model <- train(Class~., data=balanced, method="svmRadial", trControl=controlLOOCV,tuneGrid=tuneGrid)
     
     # now predict on the full unlabelled set 
-    pred <- predict(fit.model, unlabelled.all[, -last.col], 
-                    decision.values = TRUE, probability = TRUE)
-  
+    #pred <- predict(fit.model, unlabelled.all[, -last.col], 
+    #                decision.values = TRUE, probability = TRUE)
+    pred <- predict(model$finalModel, unlabelled.all[, -last.col],type="prob")
+    #return(pred)
     # store the probabilities against the identifiers
-    currentProbabilities <- attr(pred, "probabilities")[,1]
+    currentProbabilities <- pred[,1] # attr(pred, "probabilities")[,1]
     dt.result[, ncol(dt.result) + 1] <- currentProbabilities
     names(dt.result)[ncol(dt.result)] <- paste0("model_", i)
     
     # calculate the correlations and store 
-    currentCor <- cv(currentProbabilities) #cov(currentProbabilities, lastProbabilities)
+    currentCor <-  cor(currentProbabilities, lastProbabilities)
     iterationCors <- c(iterationCors, currentCor)  
     lastProbabilities <- currentProbabilities
     
@@ -885,7 +901,7 @@ letThereBeLight <- function (data,cost.n, degree.n) {
   dt.final <- data.frame(dt.result[,1],pred.Means=rowMeans(dt.result[,3:ncol(dt.result)]))
   names(dt.final)[colnames(dt.final)=="pred.Means"] <- "predictResult"
   plot(iterationCors,type="l",#ylim=c(0, 2),
-       ylab="covariance", 
+       ylab="correlation", 
        xlab="Number of iterations",
        main="Optimisation point for random sampling")
   #axis(1, at=seq(1, 100, by = 1), las=2)
