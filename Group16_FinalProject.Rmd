@@ -69,7 +69,7 @@ library(kknn)
 
 ```{r}
 
-setwd("C:/Users/Ling/Documents/My Study/STAT5003/Assignment2/predicting-novel-kinase-substrates")
+#setwd("C:/Users/Ling/Documents/My Study/STAT5003/Assignment2/predicting-novel-kinase-substrates")
 
 # load full data set
 dt.Insulin <- read.delim("datasets/InsulinPhospho.txt")
@@ -94,7 +94,7 @@ dt.labeled <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt' | dt.Insulin$Kinases 
 
 ```{r}
 
-setwd("C:/Users/Ling/Documents/My Study/STAT5003/Assignment2/predicting-novel-kinase-substrates")
+#setwd("C:/Users/Ling/Documents/My Study/STAT5003/Assignment2/predicting-novel-kinase-substrates")
 
 # load prediction_2016 result
 
@@ -797,7 +797,7 @@ model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n
 }
 ```
 
-# function to analyze difference between 2016 predict result and our prediction result 
+## function to analyze difference between 2016 predict result and our prediction result 
 ```{r}
 diff.func <- function (type, dt.original, dt.prediction, title) {
 
@@ -898,16 +898,16 @@ head(mTOR.adp2)
 ## comparison with 2016 
 ```{r}
 
-diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adp 2 Model - ")
-diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adp 2 Model - ")
+diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adaptive Sampling Model - ")
+diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adaptive Sampling Model - ")
 
 ```
 
 ```{r}
 
 # result without adaptive sampling 
-diff.func ("predictResult", df.Akt, aktNancies, "Akt Full Model - ")
-diff.func ("predictResult", df.mTOR, mTORNancies, "mTOR Full Model - ")
+diff.func ("predictResult", df.Akt, aktNancies, "Akt predictions w/o adaptive sampling - ")
+diff.func ("predictResult", df.mTOR, mTORNancies, "mTOR predictions w/o adaptive sampling - ")
 
 ```
 
