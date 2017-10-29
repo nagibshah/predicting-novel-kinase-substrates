@@ -462,7 +462,7 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 ## run through some models to pick best one for mTOR 
 
 ```{r, warning=FALSE}
-View(dt.feature.selection.mTOR)
+
 # analyze each model
 rocKnn <- AnalyseModels("kknn",dt.feature.selection.mTOR)
 rocSvmR <- AnalyseModels("svmRadial",dt.feature.selection.mTOR)
