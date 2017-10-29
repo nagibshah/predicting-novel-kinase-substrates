@@ -878,11 +878,13 @@ mTOR.neg <- dt.mTOR.fulmodel[which(dt.mTOR.fulmodel$Identifier %in%
 Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.Akt.fulmodel[, 2:17])
 Akt.adp2[Akt.adp2$Class==1, ]
 Akt.adp2[Akt.adp2$Identifier %in% dt.mTOR$V1, ]
+write.csv(Akt.adp2, "Akt prediction result from adaptive sampling.csv")
 
 
 mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.mTOR.fulmodel[, 2:17])
 mTOR.adp2[mTOR.adp2$Class==1, ]
 mTOR.adp2[mTOR.adp2$Identifier %in% dt.Akt$V1, ]
+write.csv(mTOR.adp2, "mTOR prediction result from adaptive sampling.csv")
 
 print("Our final Akt prediction result with adaptive sampling technic is saved in data frame Akt.adp2")
 head(Akt.adp2)
@@ -898,16 +900,18 @@ head(mTOR.adp2)
 ## comparison with 2016 
 ```{r}
 
-diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adp 2 Model - ")
-diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adp 2 Model - ")
+diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adaptive Sampling Model - ")
+diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adaptive Sampling Model - ")
 
 ```
 
 ```{r}
 
 # result without adaptive sampling 
-diff.func ("predictResult", df.Akt, aktNancies, "Akt Full Model - ")
-diff.func ("predictResult", df.mTOR, mTORNancies, "mTOR Full Model - ")
+diff.func ("predictResult", df.Akt, aktNancies, "Akt Non-Adaptive Sampling Model - ")
+diff.func ("predictResult", df.mTOR, mTORNancies, "mTOR Non-Adaptive Sampling Model - ")
+write.csv(aktNancies, "Akt prediction result from non-adaptive sampling.csv")
+write.csv(mTORNancies, "mTOR prediction result from non-adaptive sampling.csv")
 
 ```
 
