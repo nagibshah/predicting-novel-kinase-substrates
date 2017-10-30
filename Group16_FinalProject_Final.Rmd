@@ -156,7 +156,7 @@ print("Plots appear to indicate that the labeled data can be separated. Thinking
 
 # Feature extraction 
 ## seq.window pattern transformation
-```{r, warning=FALSE, echo=FALSE}
+```{r, warning=FALSE}
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
@@ -492,9 +492,9 @@ print("SVM Radial is understood to be a squared exponential kernel and as such c
 
 As such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.
 
-In contrast the SVM linear and poly are parametric and as such makeas assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).
+In contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).
 
-In short, SVM Radial is the better option as it can scales well with complexity to define and separate the negatives from the positives more effectively. 
+In short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively. 
 ")
 
 print("Best Model tuning parameters - AKT")
@@ -709,6 +709,18 @@ axis(1, at=seq(1, 16, by = 1), las=2)
 
 All the features in both Akt & Mtor classifications yields impressive results. 
 As such all features are important and cannot be dropped.
+
+# Initial plot to see what it all looks like over two features 
+## the objective here is to identify the novel akt and mtor substrates with only a small amount of labelled data
+
+```{r}
+
+
+plot(dt.unlabelled[, c("Avg.Fold","AUC")],col="gray", pch="?", main="The Class Imbalance Problem")
+points(dt.labeled.Akt[,c("Avg.Fold","AUC")], col="red", pch=20)
+points(dt.labeled.mTOR[,c("Avg.Fold","AUC")], col="blue", pch=20)
+
+```
 
 # Let there be light - Learn more about the unlabelled dataset
 
