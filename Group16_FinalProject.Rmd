@@ -2,7 +2,7 @@
 title: "Group16_Project2"
 group: 16
 member: Nagib Shah / Ling Qi / Xinan Ma / Young Choi
-author: "Ling Qi & Nagib Shah"
+author: "Ling Qi"
 date: "19 September 2017"
 output: html_document
 ---
@@ -154,8 +154,7 @@ print("Plots appear to indicate that the labeled data can be separated. Thinking
 
 ```
 
-# Feature extraction 
-## seq.window pattern transformation
+# seq.window pattern transformation
 ```{r, warning=FALSE, echo=FALSE}
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
@@ -185,7 +184,7 @@ colnames(mTORSequences.pfm) <- colnames(mTORSequences)
 
 ```
 
-### visualise the patterns 
+## visualise the patterns 
 
 ```{r, warning=FALSE}
 
@@ -206,7 +205,7 @@ barplot(mTORSequences.pfm, col=brewer.pal(nrow(mTORSequences.pfm), "Paired"),
 
 ```
 
-### pattern match score 
+## pattern match score 
 
 ```{r}
 
@@ -265,7 +264,7 @@ dt.Insulin$mTORMotifMatch <- as.numeric(lapply(dt.Insulin$mTORMotif, getPercenta
 
 ```
 
-### summary of the new features motif
+# summary of the new features motif
 
 ```{r}
 #View(dt.unlabeled)
@@ -282,7 +281,7 @@ dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
 ```
 
-## Temproal profile fitting and average scores 
+# feature extraction 
 
 ```{r, warning=FALSE}
 
@@ -488,15 +487,6 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 
 print("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset")  
 
-print("SVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric. 
-
-As such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.
-
-In contrast the SVM linear and poly are parametric and as such makeas assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).
-
-In short, SVM Radial is the better option as it can scales well with complexity to define and separate the negatives from the positives more effectively. 
-")
-
 print("Best Model tuning parameters - AKT")
 print("SVM Radial - Sigma: 1, C: 1.1")
 
@@ -587,7 +577,7 @@ backwardStepwise <- function(train, cls.train, sortedFeatures) {
         trainingData <- train[-fold[[i]], features]
         testingData <- train[fold[[i]],features]
         #print(truth)
-        svm.model <- svm(x=trainingData, y=cls.train[-fold[[i]]], kernel="radial", type="C-classification",cost = 1.1)
+        svm.model <- svm(x=trainingData, y=cls.train[-fold[[i]]], kernel="radial", type="C-classification")
         pred <- predict(svm.model, testingData)
         #print(pred)
         accuracy <- sum(pred == truth) / length(truth)
@@ -774,7 +764,7 @@ model.func <- function (dt.model.full, dt.labeled, cost.n, degree.n, iterations,
 }
 
 # ensemble function (make final predictions)
-model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n, dt.pred, iterations) {
+model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n, dt.pred) {
 
   dt.model.full %>%
     mutate(Class = -1) %>%
@@ -785,7 +775,7 @@ model.adp2.func <- function (dt.model.full, dt.labeled, dt.neg, cost.n, degree.n
   # data frame to store pred result
   dt.result <- dt.model.full[, c("Identifier", "Class")]
 
-  for (i in 1:iterations) {
+  for (i in 1:1000) {
 
     # generate data for model, combining positive labeled, and the same size selected from most likely negative from adaptive sampling result
     dt.model <- rbind(dt.model.full[dt.model.full$Class==1,], dt.neg[sample(nrow(dt.neg), nrow(dt.labeled)),])
@@ -830,19 +820,19 @@ dt.delta <- merge(dt.original[, c(which(colnames(dt.original)=="Identifier"), gr
 dt.delta$delta<-(dt.delta[,2]-dt.delta[,3])*100
 #dt.delta<-dt.delta[complete.cases(dt.delta$delta),] 
 
-ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50) +ggtitle(paste0(title, " Distribution of prediction difference 2016 minus 2017"))
+ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50) +ggtitle(paste0(title, "\n Distribution of prediction difference 2016 minus 2017")) + theme(plot.title = element_text(hjust = 0.5))
 
 }
 
 ```
 
-## Create Highly probable Negative subsets
+## Create Highly probabble Negative subsets
 
 ### akt
 
 ```{r}
 
-dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "fitted.score")]
+dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "fitted.score")]
 aktNancies <- model.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000, dt.Akt.fulmodel[, 2:17]) # as per best tuning param val 
 
 ```
@@ -851,7 +841,7 @@ aktNancies <- model.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000, dt.Akt.fulmodel[
 
 ```{r}
 
-dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotifMatch", "fitted.score")]
+dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotif", "fitted.score")]
 mTORNancies <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1.1, 1, 1000, dt.mTOR.fulmodel[, 2:17])
 
 ```
@@ -866,7 +856,7 @@ aktNancies[aktNancies$Identifier %in% dt.mTOR$V1, ]
 
 # negatives subset for ensemble step 
 Akt.neg <- dt.Akt.fulmodel[which(dt.Akt.fulmodel$Identifier %in% 
-                                   aktNancies[aktNancies$predictResult < 0.3, ]$Identifier 
+                                   aktNancies[aktNancies$predictResult < 0.5, ]$Identifier 
                                  & !dt.Akt.fulmodel$Identifier %in% dt.Akt$V1), ]
 
 # mtors 
@@ -876,116 +866,26 @@ mTORNancies[mTORNancies$Identifier %in% dt.Akt$V1, ]
 # negative subset for ensemble step, due to high probability value of labeled Akt in mTOR model, we decided to set up threshold at 0.8 for negative class in mTOR model
 mTOR.neg <- dt.mTOR.fulmodel[which(dt.mTOR.fulmodel$Identifier %in%
                                      mTORNancies[mTORNancies$predictResult 
-                                                          < 0.6, ]$Identifier & 
+                                                          < 0.8, ]$Identifier & 
                                      !dt.mTOR.fulmodel$Identifier %in% dt.mTOR$V1), ]
-
-```
-
-### Visualise the results of positive unlabelled learning
-
-#### Akt Positive Unlabelled Learning
-
-```{r}
-
-par(mfrow=c(1,2))
-# Pre learining
-
-plot(dt.Akt.fulmodel[, c("Avg.Fold","aktMotifMatch")],col="gray", pch=20, main="Pre Positive Learning")
-points(dt.feature.selection.akt[,c("Avg.Fold","aktMotifMatch")], col="red", pch="+")
-
-# Post learning 
-
-plot(dt.Akt.fulmodel[, c("Avg.Fold","aktMotifMatch")],col="gray", pch=20, main="After Positive unlabeled Learning")
-points(Akt.neg[,c("Avg.Fold","aktMotifMatch")], col="blue", pch="-")
-points(dt.feature.selection.akt[,c("Avg.Fold","aktMotifMatch")], col="red", pch="+")
-
-```
-
-#### mTOR positive unlabelled learning
-
-```{r}
-
-par(mfrow=c(1,2))
-# Pre learining
-
-plot(dt.mTOR.fulmodel[, c("Avg.Fold","mTORMotifMatch")],col="gray", pch=20, main="Pre Positive Learning")
-points(dt.feature.selection.mTOR[,c("Avg.Fold","mTORMotifMatch")], col="red", pch="+")
-
-# Post learning 
-
-plot(dt.mTOR.fulmodel[, c("Avg.Fold","mTORMotifMatch")],col="gray", pch=20, main="After Positive unlabeled Learning")
-points(mTOR.neg[,c("Avg.Fold","mTORMotifMatch")], col="blue", pch="-")
-points(dt.feature.selection.mTOR[,c("Avg.Fold","mTORMotifMatch")], col="red", pch="+")
 
 ```
 
 
 # Final Predictions
-
-## akt final predictions 
 ```{r, warning=FALSE}
 
-ensembleCorrelations <- c()
-# instantiate the last probability values 
-lastProbabilities <- c()
-Akt.adp2 <- NULL
-
-for(x in c(10,50,100,300,500,800,1000, 1200)) { # seq(200, 1000, by=200)
-  Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.Akt.fulmodel[, 2:17],x)
-  
-  if (length(lastProbabilities) > 0)
-  {
-    currentCor <-  cor(Akt.adp2$predictResult, lastProbabilities)
-    ensembleCorrelations <- c(ensembleCorrelations, currentCor)  
-  }
-  lastProbabilities <- Akt.adp2$predictResult
-}
+Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.Akt.fulmodel[, 2:17])
 Akt.adp2[Akt.adp2$Class==1, ]
 Akt.adp2[Akt.adp2$Identifier %in% dt.mTOR$V1, ]
 write.csv(Akt.adp2, "Akt prediction result from adaptive sampling.csv")
 
-# plot the correlations 
-# first iteration no cors so one less
-ensembleCorrelations2 <- cbind(ensembleCorrelations, c(50,100,300,500,800,1000, 1200)) 
-plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="Optimum Ensemble size",col="red",pch=20)
-lines(ensembleCorrelations2[,2],ensembleCorrelations2[,1])
 
-print("Correlation plot indicates optimum sampling reached at 1000.")
-```
-## mtor final predictions 
-```{r}
-
-ensembleCorrelations <- c()
-# instantiate the last probability values 
-lastProbabilities <- c()
-mTOR.adp2 <- NULL
-
-for(x in c(10,50,100,300,500,800,1000, 1200)) { # seq(200, 1000, by=200)
-  mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.mTOR.fulmodel[, 2:17],x)
-  
-  if (length(lastProbabilities) > 0)
-  {
-    currentCor <-  cor(mTOR.adp2$predictResult, lastProbabilities)
-    ensembleCorrelations <- c(ensembleCorrelations, currentCor)  
-  }
-  lastProbabilities <- mTOR.adp2$predictResult
-}
+mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.mTOR.fulmodel[, 2:17])
 mTOR.adp2[mTOR.adp2$Class==1, ]
 mTOR.adp2[mTOR.adp2$Identifier %in% dt.Akt$V1, ]
 write.csv(mTOR.adp2, "mTOR prediction result from adaptive sampling.csv")
 
-# plot the correlations 
-ensembleCorrelations2 <- cbind(ensembleCorrelations, c(50,100,300,500,800,1000,1200))
-plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="Optimum Ensemble size",col="red",pch=20)
-lines(ensembleCorrelations2[,2],ensembleCorrelations2[,1])
-
-print("Correlation plot indicates optimum sampling reached at 800.")
-
-```
-
-## Save the final results 
-
-```{r}
 print("Our final Akt prediction result with adaptive sampling technic is saved in data frame Akt.adp2")
 head(Akt.adp2)
 print("Our final mTOR prediction result with adaptive sampling technic is saved in data frame mTOR.adp2")
@@ -1000,16 +900,16 @@ head(mTOR.adp2)
 ## comparison with 2016 
 ```{r}
 
-diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adaptive Sampling Model - ")
-diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adaptive Sampling Model - ")
+diff.func ("predictResult", df.Akt, Akt.adp2, "Akt Adaptive Sampling Model")
+diff.func ("predictResult", df.mTOR, mTOR.adp2, "mTOR Adaptive Sampling Model")
 
 ```
 
 ```{r}
 
 # result without adaptive sampling 
-diff.func ("predictResult", df.Akt, aktNancies, "Akt Non-Adaptive Sampling Model - ")
-diff.func ("predictResult", df.mTOR, mTORNancies, "mTOR Non-Adaptive Sampling Model - ")
+diff.func ("predictResult", df.Akt, aktNancies, "Akt Non-Adaptive Sampling Model")
+diff.func ("predictResult", df.mTOR, mTORNancies, "mTOR Non-Adaptive Sampling Model")
 write.csv(aktNancies, "Akt prediction result from non-adaptive sampling.csv")
 write.csv(mTORNancies, "mTOR prediction result from non-adaptive sampling.csv")
 
@@ -1020,7 +920,7 @@ write.csv(mTORNancies, "mTOR prediction result from non-adaptive sampling.csv")
 # using simulation and/or create a conservative lower and/or upper bound for performance
 ```{r}
 # summarize each feature
-feat.list <- dt.Insulin[, c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "mTORMotifMatch", "fitted.score")]
+feat.list <- dt.Insulin[, c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "mTORMotif", "fitted.score")]
 feat.summary <- sapply(feat.list, summary)
 feat.sd <- summarise_all(feat.list, funs(sd))
 row.names(feat.sd) <- "sd"
@@ -1061,7 +961,7 @@ dt.simulation.func <- function(dt){
 
 dt.sim <- dt.simulation.func(feat.summary)
 dt.sim <- data.frame(dt.sim)
-colnames(dt.sim) <- c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "mTORMotifMatch", "fitted.score")
+colnames(dt.sim) <- c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "AktMotif", "mTORMotif", "fitted.score")
 #class(dt.sim)
 #sapply(dt.sim, class)
 #View(dt.sim)
@@ -1071,8 +971,8 @@ colnames(dt.sim) <- c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m",
 # check if any missing value in simulation data set 
 sum(!complete.cases(dt.sim))
 
-dt.simulation.Akt <- dt.sim[sample(1:nrow(dt.sim), size = nrow(dt.Insulin)), -which(names(dt.sim) == "mTORMotifMatch")]
-dt.simulation.mTOR <- dt.sim[sample(1:nrow(dt.sim), size = nrow(dt.Insulin)), -which(names(dt.sim) == "aktMotifMatch")]
+dt.simulation.Akt <- dt.sim[sample(1:nrow(dt.sim), size = nrow(dt.Insulin)), -which(names(dt.sim) == "mTORMotif")]
+dt.simulation.mTOR <- dt.sim[sample(1:nrow(dt.sim), size = nrow(dt.Insulin)), -which(names(dt.sim) == "AktMotif")]
 
 # final prediction for simulated data 
 Akt.sim.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.simulation.Akt )
