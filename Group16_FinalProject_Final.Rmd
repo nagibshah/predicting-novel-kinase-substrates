@@ -1075,9 +1075,9 @@ dt.simulation.Akt <- dt.sim[sample(1:nrow(dt.sim), size = nrow(dt.Insulin)), -wh
 dt.simulation.mTOR <- dt.sim[sample(1:nrow(dt.sim), size = nrow(dt.Insulin)), -which(names(dt.sim) == "aktMotifMatch")]
 
 # final prediction for simulated data 
-Akt.sim.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.simulation.Akt )
+Akt.sim.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.simulation.Akt,1000)
 
-mTOR.sim.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.simulation.mTOR)
+mTOR.sim.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.simulation.mTOR,1000)
 
 # plot given insulin data prob and simulation data prob for Akt 
 par(mfrow=c(1, 2))
