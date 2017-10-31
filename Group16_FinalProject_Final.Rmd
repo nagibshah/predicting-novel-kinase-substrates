@@ -509,22 +509,10 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 ```{r}
 
 cat("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset.")  
-<<<<<<< HEAD
 
 cat("\n\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
 
 cat("\n\n\nBest Model tuning parameters - Akt")
-cat("\nSVM Radial - Sigma: 1, C: 1.1")
-
-=======
-
-cat("\n\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
-
-cat("\n\n\nBest Model tuning parameters - Akt")
-cat("\nSVM Radial - Sigma: 1, C: 1.1")
-
->>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
-cat("\n\nBest Model tuning parameters - mTOR")
 cat("\nSVM Radial - Sigma: 1, C: 1.1")
 
 ```
@@ -718,11 +706,7 @@ test.accuracies.mtor.avg <- colMeans(test.accuracies.mtor)
 ```{r}
 
 plot(rev(test.accuracies.akt.avg),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy Akt")
-<<<<<<< HEAD
 axis(1, at=seq(1, 32, by = 1), las=2)
-=======
-axis(1, at=seq(1, 16, by = 1), las=2)
->>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 
 ```
 
@@ -731,11 +715,7 @@ axis(1, at=seq(1, 16, by = 1), las=2)
 ```{r}
 
 plot(rev(test.accuracies.mtor.avg),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mTOR")
-<<<<<<< HEAD
 axis(1, at=seq(1, 32, by = 1), las=2)
-=======
-axis(1, at=seq(1, 16, by = 1), las=2)
->>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 
 ```
 
@@ -1095,12 +1075,6 @@ for (i in 1:ncol(feat.list)) {
   lines(xfit, yfit, col="blue", lwd=2)
 }
 ```
-<<<<<<< HEAD
-
-# generate simulation data set 
-```{r}
-=======
->>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 
 # generate simulation data set 
 ```{r}
