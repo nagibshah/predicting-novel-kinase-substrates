@@ -2,7 +2,7 @@
 title: "Group16_Project2"
 group: 16
 member: Nagib Shah / Ling Qi / Xinan Ma / Young Choi
-author: "Ling Qi & Nagib Shah"
+author: "Ling Qi, Nagib Shah, Xinan Ma, Young Choi"
 date: "19 September 2017"
 output: html_document
 ---
@@ -322,16 +322,37 @@ head(dt.Insulin)
 
 # average fold and average score are the same. already provided
 
+## expand some of the other features to allow separation at higher dimensional space 
+#  AUC ^ 2, 
+
+expandedFeatures <- NULL
+featuresToExpand <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score")
+expansionPool <- dt.Insulin[,featuresToExpand]
+
+for (i in 1:ncol(expansionPool)) {
+  exp2 <- sapply(expansionPool[,i],FUN = function(x) x ^ 2)
+  expandedFeatures <- cbind(expandedFeatures, exp2)
+  colnames(expandedFeatures)[i] <- paste(colnames(expansionPool)[i],"Exp2",sep = "")
+}
+
+expandedFeatures <- as.data.frame(expandedFeatures)
+
+expandedFeatures$Identifier <- dt.Insulin$Identifier
+
+dt.Insulin <- merge(dt.Insulin, expandedFeatures, by=c("Identifier"))
+
 ```
 
 # model analysis and select the best fit model
 ## setup 
 ```{r}
 
-# total 16 features approx
-predictorsAkt <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","aktMotifMatch","Kinases")
+# total 32 features approx
+#predictorsAkt <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","aktMotifMatch","Kinases")
+predictorsAkt <- c("X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2","aktMotifMatch","Kinases")
 
-predictorsmTOR <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","mTORMotifMatch","Kinases")
+#predictorsmTOR <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","mTORMotifMatch","Kinases")
+predictorsmTOR <- c("X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2","mTORMotifMatch","Kinases")
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
@@ -364,8 +385,8 @@ temp <- NULL
 # final sets for feature selection exercise
 dt.feature.selection.akt$Kinases <- as.factor(dt.feature.selection.akt$Kinases)
 dt.feature.selection.mTOR$Kinases <- as.factor(dt.feature.selection.mTOR$Kinases)
-colnames(dt.feature.selection.akt)[17] <- "Class"
-colnames(dt.feature.selection.mTOR)[17] <- "Class"
+colnames(dt.feature.selection.akt)[ncol(dt.feature.selection.akt)] <- "Class"
+colnames(dt.feature.selection.mTOR)[ncol(dt.feature.selection.mTOR)] <- "Class"
 
 dim(dt.feature.selection.akt)
 dim(dt.feature.selection.mTOR)
@@ -373,8 +394,9 @@ dim(dt.feature.selection.mTOR)
 # function for model evaluation 
 
 sampleData <- function (positives, featureSpace) {
-      colnames(positives)[17] <- "Kinases" # change col name 
+      colnames(positives)[ncol(positives)] <- "Kinases" # change col name 
       featureSpace <- colnames(positives)
+      #print(featureSpace)
       #set.seed(33)
       randomsamples <- sample(nrow(dt.unlabelled), size=nrow(positives), replace = FALSE)
       #print(randomsamples)
@@ -383,7 +405,7 @@ sampleData <- function (positives, featureSpace) {
       negatives$Kinases <- -1
       # make a balanced set
       balanced <- rbind(positives, negatives)
-      colnames(balanced)[17] <- "Class" # change col name
+      colnames(balanced)[ncol(balanced)] <- "Class" # change col name
       return(balanced)
 }
 
@@ -421,12 +443,12 @@ AnalyseModels <- function (method, data) {
   train <- sampleData(positives=data[which(data$Class == 1),])
   
   # predict on training set 
-  pred <- predict(model$finalModel, train[,-17])
+  pred <- predict(model$finalModel, train[,-ncol(train)])
   if (method=="lda") {
-    rocModel <- roc(train[, 17], as.numeric(pred$class))  
+    rocModel <- roc(train[, ncol(train)], as.numeric(pred$class))  
   }
   else {
-    rocModel <- roc(train[, 17], as.numeric(pred))  
+    rocModel <- roc(train[, ncol(train)], as.numeric(pred))  
   }
   
   return(rocModel)
@@ -486,22 +508,15 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 ## Model analysis results
 ```{r}
 
-print("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset")  
+cat("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset.")  
 
-print("SVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric. 
+cat("\n\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
 
-As such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.
+cat("\n\n\nBest Model tuning parameters - Akt")
+cat("\nSVM Radial - Sigma: 1, C: 1.1")
 
-In contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).
-
-In short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively. 
-")
-
-print("Best Model tuning parameters - AKT")
-print("SVM Radial - Sigma: 1, C: 1.1")
-
-print("Best Model tuning parameters - mTOR")
-print("SVM Radial - Sigma: 1, C: 1.1")
+cat("\n\nBest Model tuning parameters - mTOR")
+cat("\nSVM Radial - Sigma: 1, C: 1.1")
 
 ```
 
@@ -512,10 +527,11 @@ print("SVM Radial - Sigma: 1, C: 1.1")
 library(mlbench)
 library(caret)
 
-# total 16 features approx
-predictorsAkt <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","aktMotifMatch","Kinases")
+# total 32 features approx
 
-predictorsmTOR <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score","mTORMotifMatch","Kinases")
+predictorsAkt <- c("X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2","aktMotifMatch","Kinases")
+
+predictorsmTOR <- c("X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2","mTORMotifMatch","Kinases")
 
 dt.labeled.mTOR <-  dt.Insulin[which(dt.Insulin$Kinases == 'mTOR'), ]
 dt.labeled.Akt <- dt.Insulin[which(dt.Insulin$Kinases == 'Akt'), ]
@@ -552,14 +568,14 @@ dim(dt.feature.selection.mTOR)
 ```{r}
 
 tstatSort <- function (train) {
-  train.byClass <- split(train[,-17], train$Kinases)
+  train.byClass <- split(train[,-ncol(train)], train$Kinases)
 
   # perform a t-test
   feature.pvalues <- c()
   for(i in 1:(ncol(train)-1)) {
     feature.pvalues <- c(feature.pvalues, t.test(train.byClass[[1]][,i], train.byClass[[2]][,i])$p.value)
   }
-  names(feature.pvalues) <- colnames(train[,-17])
+  names(feature.pvalues) <- colnames(train[,-ncol(train)])
   
   # filter the top most discriminative feature based on p-values
   filtered.features <- names(sort(feature.pvalues)) #[1:10])
@@ -616,8 +632,8 @@ randomAccuracies <- function(positives, featureSpace, sortedFeatures, iterations
     # make a balanced set
     balanced <- rbind(positives, negatives)
     # run the wrapper selection process
-    accuracies <- backwardStepwise(train = balanced[,-17],
-                                        cls.train = balanced[,17],
+    accuracies <- backwardStepwise(train = balanced[,-ncol(balanced)],
+                                        cls.train = balanced[,ncol(balanced)],
                                         sortedFeatures = sortedFeatures)
     #accuracies <- data.frame(accuracies)
     #names(accuracies) <- seq(length(sortedFeatures), 1)
@@ -692,8 +708,8 @@ test.accuracies.mtor.avg <- colMeans(test.accuracies.mtor)
 
 ```{r}
 
-plot(rev(test.accuracies.akt.avg),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy akt")
-axis(1, at=seq(1, 16, by = 1), las=2)
+plot(rev(test.accuracies.akt.avg),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy Akt")
+axis(1, at=seq(1, 32, by = 1), las=2)
 
 ```
 
@@ -701,8 +717,8 @@ axis(1, at=seq(1, 16, by = 1), las=2)
 
 ```{r}
 
-plot(rev(test.accuracies.mtor.avg),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mtor")
-axis(1, at=seq(1, 16, by = 1), las=2)
+plot(rev(test.accuracies.mtor.avg),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mTOR")
+axis(1, at=seq(1, 32, by = 1), las=2)
 
 ```
 ## feature selection results 
@@ -854,8 +870,10 @@ ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50)  +ggtitle(paste0(tit
 
 ```{r}
 
-dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "fitted.score")]
-aktNancies <- model.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000, dt.Akt.fulmodel[, 2:17]) # as per best tuning param val 
+#dt.Akt.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "fitted.score")]
+dt.Akt.fulmodel <- dt.Insulin[,c("Identifier", "X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2","aktMotifMatch")]
+
+aktNancies <- model.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000, dt.Akt.fulmodel[, 2:32]) # as per best tuning param val 
 
 ```
 
@@ -863,8 +881,11 @@ aktNancies <- model.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000, dt.Akt.fulmodel[
 
 ```{r}
 
-dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotifMatch", "fitted.score")]
-mTORNancies <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1.1, 1, 1000, dt.mTOR.fulmodel[, 2:17])
+#dt.mTOR.fulmodel <- dt.Insulin[, c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "mTORMotifMatch", "fitted.score")]
+
+dt.mTOR.fulmodel <- dt.Insulin[,c("Identifier","X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2","mTORMotifMatch")]
+
+mTORNancies <- model.func(dt.mTOR.fulmodel, dt.mTOR, 1.1, 1, 1000, dt.mTOR.fulmodel[, 2:32])
 
 ```
 
@@ -878,7 +899,7 @@ aktNancies[aktNancies$Identifier %in% dt.mTOR$V1, ]
 
 # negatives subset for ensemble step 
 Akt.neg <- dt.Akt.fulmodel[which(dt.Akt.fulmodel$Identifier %in% 
-                                   aktNancies[aktNancies$predictResult < 0.3, ]$Identifier 
+                                   aktNancies[aktNancies$predictResult < 0.4, ]$Identifier 
                                  & !dt.Akt.fulmodel$Identifier %in% dt.Akt$V1), ]
 
 # mtors 
@@ -907,7 +928,7 @@ points(dt.feature.selection.akt[,c("Avg.Fold","aktMotifMatch")], col="red", pch=
 
 # Post learning 
 
-plot(dt.Akt.fulmodel[, c("Avg.Fold","aktMotifMatch")],col="gray", pch=20, main="After Positive unlabeled Learning")
+plot(dt.Akt.fulmodel[, c("Avg.Fold","aktMotifMatch")],col="gray", pch=20, main="Post Positive Learning")
 points(Akt.neg[,c("Avg.Fold","aktMotifMatch")], col="blue", pch="-")
 points(dt.feature.selection.akt[,c("Avg.Fold","aktMotifMatch")], col="red", pch="+")
 
@@ -925,7 +946,7 @@ points(dt.feature.selection.mTOR[,c("Avg.Fold","mTORMotifMatch")], col="red", pc
 
 # Post learning 
 
-plot(dt.mTOR.fulmodel[, c("Avg.Fold","mTORMotifMatch")],col="gray", pch=20, main="After Positive unlabeled Learning")
+plot(dt.mTOR.fulmodel[, c("Avg.Fold","mTORMotifMatch")],col="gray", pch=20, main="Post Positive Learning")
 points(mTOR.neg[,c("Avg.Fold","mTORMotifMatch")], col="blue", pch="-")
 points(dt.feature.selection.mTOR[,c("Avg.Fold","mTORMotifMatch")], col="red", pch="+")
 
@@ -943,7 +964,7 @@ lastProbabilities <- c()
 Akt.adp2 <- NULL
 
 for(x in c(10,50,100,300,500,800,1000, 1200)) { # seq(200, 1000, by=200)
-  Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.Akt.fulmodel[, 2:17],x)
+  Akt.adp2 <- model.adp2.func(dt.Akt.fulmodel, dt.Akt, Akt.neg, 1.1, 1, dt.Akt.fulmodel[, 2:32],x)
   
   if (length(lastProbabilities) > 0)
   {
@@ -959,7 +980,7 @@ write.csv(Akt.adp2, "Akt prediction result from adaptive sampling.csv")
 # plot the correlations 
 # first iteration no cors so one less
 ensembleCorrelations2 <- cbind(ensembleCorrelations, c(50,100,300,500,800,1000, 1200)) 
-plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="Optimum Ensemble size",col="red",pch=20)
+plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="Akt Optimum Ensemble size",col="red",pch=20)
 lines(ensembleCorrelations2[,2],ensembleCorrelations2[,1])
 
 print("Correlation plot indicates optimum sampling reached at 1000.")
@@ -973,7 +994,7 @@ lastProbabilities <- c()
 mTOR.adp2 <- NULL
 
 for(x in c(10,50,100,300,500,800,1000, 1200)) { # seq(200, 1000, by=200)
-  mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.mTOR.fulmodel[, 2:17],x)
+  mTOR.adp2 <- model.adp2.func(dt.mTOR.fulmodel, dt.mTOR, mTOR.neg, 1.1, 1, dt.mTOR.fulmodel[, 2:32],x)
   
   if (length(lastProbabilities) > 0)
   {
@@ -988,7 +1009,7 @@ write.csv(mTOR.adp2, "mTOR prediction result from adaptive sampling.csv")
 
 # plot the correlations 
 ensembleCorrelations2 <- cbind(ensembleCorrelations, c(50,100,300,500,800,1000,1200))
-plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="Optimum Ensemble size",col="red",pch=20)
+plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="mTOR Optimum Ensemble size",col="red",pch=20)
 lines(ensembleCorrelations2[,2],ensembleCorrelations2[,1])
 
 print("Correlation plot indicates optimum sampling reached at 800.")
@@ -1032,7 +1053,11 @@ write.csv(mTORNancies, "mTOR prediction result from non-adaptive sampling.csv")
 # using simulation and/or create a conservative lower and/or upper bound for performance
 ```{r}
 # summarize each feature
+
+#feat.list <- dt.Insulin[, c("X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2", "aktMotifMatch", "mTORMotifMatch")]
+
 feat.list <- dt.Insulin[, c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "mTORMotifMatch", "fitted.score")]
+
 feat.summary <- sapply(feat.list, summary)
 feat.sd <- summarise_all(feat.list, funs(sd))
 row.names(feat.sd) <- "sd"
@@ -1052,6 +1077,10 @@ for (i in 1:ncol(feat.list)) {
   yfit <- yfit*diff(h$mids[1:2])*length(x)
   lines(xfit, yfit, col="blue", lwd=2)
 }
+```
+
+# generate simulation data set 
+```{r}
 
 print("We can see all features are normally distributed, we can generate simulation data set based on distribution and summary of each feature")
 
@@ -1059,12 +1088,12 @@ print("We can see all features are normally distributed, we can generate simulat
 dt.simulation.func <- function(dt){
   
   fullset <- NULL
-  Identifier <- seq.int(1, 100000, 1)
+  Identifier <- seq.int(1, 200000, 1)
   fullset <- cbind(fullset, Identifier)
   
   for (i in 1:ncol(dt)) {
     set.seed(123)
-    x <- rnorm(n=100000, m=dt[c("Mean"), i], sd=dt[c("sd"), i])
+    x <- rnorm(n=200000, m=dt[c("Mean"), i], sd=dt[c("sd"), i])
     col <- x[x>=dt[c("Min."), i] & x<=dt[c("Max."), i]] 
     fullset <- cbind(fullset, col)
   }
@@ -1073,7 +1102,29 @@ dt.simulation.func <- function(dt){
 
 dt.sim <- dt.simulation.func(feat.summary)
 dt.sim <- data.frame(dt.sim)
+#colnames(dt.sim) <- c("Identifier", "X15s", "X15sExp2","X30s","X30sExp2", "X1m","X1mExp2", "X2m","X2mExp2", "X5m","X5mExp2", "X10m","X10mExp2", "X20m","X20mExp2", "X60m","X60mExp2", "Avg.Fold","Avg.FoldExp2", "AUC","AUCExp2", "Ins.1","Ins.1Exp2", "LY","LYExp2", "Ins.2","Ins.2Exp2", "MK","MKExp2", "fitted.score","fitted.scoreExp2", "aktMotifMatch", "mTORMotifMatch")
+
 colnames(dt.sim) <- c("Identifier", "X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "aktMotifMatch", "mTORMotifMatch", "fitted.score")
+
+## generate the exp2 data 
+
+expandedFeatures <- NULL
+featuresToExpand <- c("X15s", "X30s", "X1m", "X2m", "X5m", "X10m", "X20m", "X60m", "Avg.Fold", "AUC", "Ins.1", "LY", "Ins.2", "MK", "fitted.score")
+expansionPool <- dt.sim[,featuresToExpand]
+
+for (i in 1:ncol(expansionPool)) {
+  exp2 <- sapply(expansionPool[,i],FUN = function(x) x ^ 2)
+  expandedFeatures <- cbind(expandedFeatures, exp2)
+  colnames(expandedFeatures)[i] <- paste(colnames(expansionPool)[i],"Exp2",sep = "")
+}
+
+expandedFeatures <- as.data.frame(expandedFeatures)
+
+expandedFeatures$Identifier <- dt.sim$Identifier
+
+dt.sim <- merge(dt.sim, expandedFeatures, by=c("Identifier"))
+
+
 #class(dt.sim)
 #sapply(dt.sim, class)
 #View(dt.sim)
@@ -1101,7 +1152,7 @@ yfit <- yfit*diff(h$mids[1:2])*length(x)
 lines(xfit, yfit, col="blue", lwd=2)
 
 x <- Akt.adp2[, c("predictResult")]
-h<-hist(x, breaks=30, col="red", xlab="Predict Result", main="Akt Given Data")
+h<-hist(x, breaks=30, col="red", xlab="Predict Result", main="Akt Actual Data")
 xfit<-seq(min(x),max(x),length=40)
 yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
 yfit <- yfit*diff(h$mids[1:2])*length(x)
@@ -1119,7 +1170,7 @@ yfit <- yfit*diff(h$mids[1:2])*length(x)
 lines(xfit, yfit, col="blue", lwd=2)
 
 x <- mTOR.adp2[, c("predictResult")]
-h<-hist(x, breaks=30, col="red", xlab="Predict Result", main="mTOR Given Data")
+h<-hist(x, breaks=30, col="red", xlab="Predict Result", main="mTOR Actual Data")
 xfit<-seq(min(x),max(x),length=40)
 yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
 yfit <- yfit*diff(h$mids[1:2])*length(x)
