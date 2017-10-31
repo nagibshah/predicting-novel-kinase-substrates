@@ -486,11 +486,11 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 ## Model analysis results
 ```{r}
 
-cat("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset")  
+cat("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset.")  
 
-cat("\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
+cat("\n\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
 
-cat("\n\nBest Model tuning parameters - Akt")
+cat("\n\n\nBest Model tuning parameters - Akt")
 cat("\nSVM Radial - Sigma: 1, C: 1.1")
 
 cat("\n\nBest Model tuning parameters - mTOR")
@@ -1034,7 +1034,7 @@ feat.summary <- rbind(feat.summary, feat.sd)
 #View(feat.summary)
 
 # plot each feature
-par(mfrow=c(9, 2))
+par(mfrow=c(2,2)) 
 
 for (i in 1:ncol(feat.list)) {
   
@@ -1045,7 +1045,10 @@ for (i in 1:ncol(feat.list)) {
   yfit <- yfit*diff(h$mids[1:2])*length(x)
   lines(xfit, yfit, col="blue", lwd=2)
 }
+```
 
+# generate simulation data set 
+```{r}
 print("We can see all features are normally distributed, we can generate simulation data set based on distribution and summary of each feature")
 
 # generate simulation data 
