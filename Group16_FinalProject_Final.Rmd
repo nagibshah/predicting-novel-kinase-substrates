@@ -456,7 +456,7 @@ AnalyseModels <- function (method, data) {
 
 ```
 
-## run through some models to pick best one for AKT
+## run through some models to pick the best one for Akt
 
 ```{r, warning=FALSE}
 
@@ -482,7 +482,7 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 
 ```
 
-## run through some models to pick best one for mTOR 
+## run through some models to pick the best one for mTOR 
 
 ```{r, warning=FALSE}
 
@@ -509,12 +509,21 @@ legend("bottomright", inset = .05, legend=c("KNN", "SVM Radial", "SVM Linear", "
 ```{r}
 
 cat("SVM Radial yielded a the best overall result although the ROC curve indicates otherwise on the small subset.")  
+<<<<<<< HEAD
 
 cat("\n\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
 
 cat("\n\n\nBest Model tuning parameters - Akt")
 cat("\nSVM Radial - Sigma: 1, C: 1.1")
 
+=======
+
+cat("\n\n\nSVM Radial is understood to be a squared exponential kernel and as such categegorised as  non-parametric method. On the other hand SVM Poly kernel and linear kernels are parametric.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nAs such the biggest benefit with SVM Radial is that the complexity of the model can be potentially infinite and can define more complex relationship within the feature space to separate the data and thereby make classifications possible.\n\nIn contrast the SVM linear and poly are parametric and as such makes assumptions about the distributions of the data which are not always correct. Especially, since we have very little labelled positives and weak assumptions about the samples being negative (from random sample) a nonparametric method is thought to be performing better (SVM Radial).\n\nIn short, SVM Radial is the better option as it can scale well with complexity to define and separate the negatives from the positives more effectively.")
+
+cat("\n\n\nBest Model tuning parameters - Akt")
+cat("\nSVM Radial - Sigma: 1, C: 1.1")
+
+>>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 cat("\n\nBest Model tuning parameters - mTOR")
 cat("\nSVM Radial - Sigma: 1, C: 1.1")
 
@@ -667,7 +676,7 @@ featuresmTOR[1]
 ```
 
 ## backward stepwise 
-### akt feature selection with random sampling, LOOCV 
+### Akt feature selection with random sampling, LOOCV 
 
 ```{r}
 
@@ -704,34 +713,41 @@ test.accuracies.mtor.avg <- colMeans(test.accuracies.mtor)
 
 ```
 
-### akt plots
+### Akt plots
 
 ```{r}
 
 plot(rev(test.accuracies.akt.avg),type="l",ylim=c(0.8, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy Akt")
+<<<<<<< HEAD
 axis(1, at=seq(1, 32, by = 1), las=2)
+=======
+axis(1, at=seq(1, 16, by = 1), las=2)
+>>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 
 ```
 
-### mtor plots
+### mTOR plots
 
 ```{r}
 
 plot(rev(test.accuracies.mtor.avg),type="l",ylim=c(0.5, 1), xaxt="n", ylab="Test accuracies", xlab="Number of features sorted",main="Feature selection vs model accuracy mTOR")
+<<<<<<< HEAD
 axis(1, at=seq(1, 32, by = 1), las=2)
+=======
+axis(1, at=seq(1, 16, by = 1), las=2)
+>>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 
 ```
-## feature selection results 
 
-All the features in both Akt & Mtor classifications yields impressive results. 
-As such all features are important and cannot be dropped.
+## feature selection results 
+```{r}
+cat("\nAll the features in both Akt & mTOR classifications yields impressive results. \nAs such all features are important and cannot be dropped.")
+```
+
 
 # Initial plot to see what it all looks like over two features 
-## the objective here is to identify the novel akt and mtor substrates with only a small amount of labelled data
-
+## the objective here is to identify the novel Akt and mTOR substrates with only a small amount of labelled data
 ```{r}
-
-
 plot(dt.unlabelled[, c("Avg.Fold","AUC")],col="gray", pch="?", main="The Class Imbalance Problem")
 points(dt.labeled.Akt[,c("Avg.Fold","AUC")], col="red", pch=20)
 points(dt.labeled.mTOR[,c("Avg.Fold","AUC")], col="blue", pch=20)
@@ -866,7 +882,7 @@ ggplot(dat=dt.delta) + geom_histogram(aes(x=delta),bins=50)  +ggtitle(paste0(tit
 
 ## Create Highly probable Negative subsets
 
-### akt
+### Akt
 
 ```{r}
 
@@ -877,7 +893,7 @@ aktNancies <- model.func(dt.Akt.fulmodel, dt.Akt, 1.1, 1, 1000, dt.Akt.fulmodel[
 
 ```
 
-### mtor 
+### mTOR
 
 ```{r}
 
@@ -955,7 +971,7 @@ points(dt.feature.selection.mTOR[,c("Avg.Fold","mTORMotifMatch")], col="red", pc
 
 # Final Predictions
 
-## akt final predictions 
+## Akt final predictions 
 ```{r, warning=FALSE}
 
 ensembleCorrelations <- c()
@@ -983,9 +999,10 @@ ensembleCorrelations2 <- cbind(ensembleCorrelations, c(50,100,300,500,800,1000, 
 plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="Akt Optimum Ensemble size",col="red",pch=20)
 lines(ensembleCorrelations2[,2],ensembleCorrelations2[,1])
 
-print("Correlation plot indicates optimum sampling reached at 1000.")
+print("Correlation plot indicates optimum sampling reached at 1000 for Akt.")
 ```
-## mtor final predictions 
+
+## mTOR final predictions 
 ```{r}
 
 ensembleCorrelations <- c()
@@ -1012,7 +1029,7 @@ ensembleCorrelations2 <- cbind(ensembleCorrelations, c(50,100,300,500,800,1000,1
 plot(x=ensembleCorrelations2[,2],y=ensembleCorrelations2[,1],ylab="Correlations", xlab="Ensemble Size",main="mTOR Optimum Ensemble size",col="red",pch=20)
 lines(ensembleCorrelations2[,2],ensembleCorrelations2[,1])
 
-print("Correlation plot indicates optimum sampling reached at 800.")
+print("Correlation plot indicates optimum sampling reached at 800 for mTOR.")
 
 ```
 
@@ -1066,7 +1083,7 @@ feat.summary <- rbind(feat.summary, feat.sd)
 #View(feat.summary)
 
 # plot each feature
-par(mfrow=c(2, 2))
+par(mfrow=c(2,2)) 
 
 for (i in 1:ncol(feat.list)) {
   
@@ -1078,10 +1095,15 @@ for (i in 1:ncol(feat.list)) {
   lines(xfit, yfit, col="blue", lwd=2)
 }
 ```
+<<<<<<< HEAD
 
 # generate simulation data set 
 ```{r}
+=======
+>>>>>>> a52822e6efcca96cb6542569b1ec85bbb871c8a5
 
+# generate simulation data set 
+```{r}
 print("We can see all features are normally distributed, we can generate simulation data set based on distribution and summary of each feature")
 
 # generate simulation data 
@@ -1176,7 +1198,7 @@ yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
 yfit <- yfit*diff(h$mids[1:2])*length(x)
 lines(xfit, yfit, col="blue", lwd=2)
 
-print("From the plot, we can see mTOR prediction results for both simulation data and actual data are following the similar distribution curve ")
+cat("\nFrom the plot, we can see mTOR prediction results for both simulation data and actual data are following the similar distribution curve ")
 
 ```
 
